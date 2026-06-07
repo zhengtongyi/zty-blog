@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+.astro-dev.log
+.astro-dev.pid
+.DS_Store
+npm-debug.log*
