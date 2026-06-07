@@ -312,6 +312,31 @@ VBAT
   -> GND
 ```
 
+画成局部抽象图会更直观：
+
+```mermaid
+flowchart TB
+    VBAT["B+ / VBAT<br/>电池实际电压 battery_mv"]
+    RUP["R_up<br/>上分压电阻<br/>示例: 200K"]
+    ADCNODE["ADC node / BAT_ADC<br/>ADC 引脚端电压 adc_mv"]
+    RDOWN["R_down<br/>下分压电阻<br/>示例: 100K"]
+    GND["GND"]
+    ADC["ESP32-S3 ADC1 CH3<br/>adc_oneshot_read()<br/>adc_cali_raw_to_voltage()"]
+
+    VBAT --> RUP --> ADCNODE --> RDOWN --> GND
+    ADCNODE -. "采样点" .-> ADC
+```
+
+读图时只要抓住两个电压：
+
+```text
+battery_mv:
+  B+ / VBAT 对 GND 的电压，也就是电池实际电压。
+
+adc_mv:
+  ADC node 对 GND 的电压，也就是 ESP32 ADC 实际测到的电压。
+```
+
 分压公式是：
 
 ```text
