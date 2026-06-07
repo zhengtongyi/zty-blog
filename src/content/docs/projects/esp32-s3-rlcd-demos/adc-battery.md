@@ -1,146 +1,185 @@
+﻿---
+title: ESP32-S3-RLCD ADC 电池采样示例拆解
+description: 从 ADC 原始值、校准、电阻分压和电量估算入手，读懂 03_ADC_Test 如何读取电池电压。
 ---
-title: "ESP32-S3-RLCD-4.2：用 ADC 读取电池电压"
-description: "面向零基础初学者，理解 Waveshare ESP32-S3-RLCD-4.2 官方 ADC demo 如何把 ADC 原始值换算成电池电压和电量百分比。"
----
 
-## 一句话目标
+## 一句话定位
 
-跑通 `03_ADC_Test`，看懂它如何每秒读取一次电池 ADC，并把 `raw -> calibration mV -> divider ratio -> battery voltage -> percent` 串起来。
+`03_ADC_Test` 演示如何读取板载电池电压：ESP32-S3 通过 `ADC_UNIT_1 / ADC_CHANNEL_3` 采样电池分压点，再通过校准和倍率还原为电池实际电压。
 
-## 先懂概念
+## 基础原理
 
-ADC 是 Analog to Digital Converter，中文常叫“模数转换器”。它做的事情很朴素：把一个模拟电压变成一个数字。
+ADC 是 Analog to Digital Converter，也就是模数转换器。它把模拟电压转换成数字值。ESP32-S3 ADC 读取到的第一手结果叫 `raw`，它不是电压，而是一个和输入电压相关的数字。
 
-ESP32-S3 的 ADC 直接读到的是 `raw` 原始值。`raw` 不是电压，只是 ADC 的数字结果，所以 demo 接着做校准，把 `raw` 转成芯片引脚上看到的毫伏值，也就是 calibration mV。
+从 `raw` 到电池电压需要三步：
 
-电池电压通常比 ESP32-S3 ADC 引脚能承受的电压高，开发板会用电阻分压把电池电压缩小后送进 ADC。这个 demo 里用 `* 3` 还原电池电压，意思是：ADC 引脚看到的电压约等于电池电压的三分之一。
+```text
+ADC raw
+  -> ADC 校准
+  -> ADC 引脚电压 mV
+  -> 按电阻分压倍率还原
+  -> 电池实际电压
+```
 
-最后，demo 用一个简单线性公式把电池电压换成百分比：低于 `3.0V` 当作 `0%`，高于 `4.12V` 当作 `100%`，中间按比例换算。
+电池电压通常高于 ADC 引脚适合直接测量的电压范围，所以开发板会使用电阻分压。这个 demo 中代码使用 `* 3` 还原电池电压，含义是 ADC 引脚看到的电压约为电池电压的三分之一。
 
-## 硬件/代码入口
+电量百分比不是 ADC 直接测出来的，而是 demo 用线性公式粗略估算：
 
-事实来源目录：
+```text
+3.0V 以下  -> 0%
+4.12V 以上 -> 100%
+中间       -> 按线性比例换算
+```
 
-`D:\Tools\ESP-IDF\ESP32-S3-RLCD-4.2-Demo\ESP32-S3-RLCD-4.2-Demo\02_ESP-IDF\03_ADC_Test`
+这适合示例学习，不等同于真实锂电池电量曲线。
 
-你最该看的 3 个入口：
+## 硬件与工程入口
 
-- `main/main.cpp`：`app_main()` 只调用 `UserApp_AppInit()`。
-- `components/user_app/user_app.cpp`：初始化 ADC，并创建循环任务。
-- `components/port_bsp/adc_bsp.cpp`：真正配置 ADC、读取 raw、换算电压和百分比。
+源码阅读入口：
 
-demo 使用的是 `ADC_UNIT_1`、`ADC_CHANNEL_3`，配置为 `ADC_BITWIDTH_12` 和 `ADC_ATTEN_DB_12`。
+```text
+02_ESP-IDF/03_ADC_Test/main/main.cpp
+02_ESP-IDF/03_ADC_Test/components/user_app/user_app.cpp
+02_ESP-IDF/03_ADC_Test/components/port_bsp/adc_bsp.cpp
+02_ESP-IDF/03_ADC_Test/components/port_bsp/adc_bsp.h
+```
 
-## 运行现象
+关键硬件配置：
 
-烧录运行后，串口先打印：
+| 项目 | 配置 |
+| --- | --- |
+| ADC unit | `ADC_UNIT_1` |
+| ADC channel | `ADC_CHANNEL_3` |
+| 对应 GPIO | GPIO4 |
+| 位宽 | `ADC_BITWIDTH_12` |
+| 衰减 | `ADC_ATTEN_DB_12` |
+| 校准方案 | `adc_cali_create_scheme_curve_fitting()` |
+| 分压还原 | `battery_v = adc_mv * 0.001 * 3` |
+
+## 关键流程总图
+
+```text
+app_main()
+  -> UserApp_AppInit()
+      -> Adc_PortInit()
+          -> adc_cali_create_scheme_curve_fitting()
+          -> adc_oneshot_new_unit()
+          -> adc_oneshot_config_channel(ADC_CHANNEL_3)
+      -> xTaskCreate(Adc_LoopTask)
+
+Adc_LoopTask()
+  -> Adc_GetBatteryVoltage()
+      -> adc_oneshot_read()
+      -> adc_cali_raw_to_voltage()
+      -> mV 转 V
+      -> 乘以 3 还原电池电压
+  -> 每 1000ms 打印一次
+```
+
+## 关键方法速查
+
+| 函数/方法 | 所在文件 | 作用 | 初学者需要理解的点 |
+| --- | --- | --- | --- |
+| `app_main()` | `main/main.cpp` | ESP-IDF 应用入口。 | 只调用应用初始化，主逻辑不在这里。 |
+| `UserApp_AppInit()` | `components/user_app/user_app.cpp` | 初始化 ADC 并创建采样任务。 | demo 行为层负责“多久读一次”。 |
+| `Adc_LoopTask()` | `components/user_app/user_app.cpp` | 周期读取 ADC 并打印。 | ADC 不是自动上报，任务定时主动读。 |
+| `Adc_PortInit()` | `components/port_bsp/adc_bsp.cpp` | 初始化 ADC 校准、unit、channel。 | 板级硬件配置集中在 BSP。 |
+| `adc_cali_create_scheme_curve_fitting()` | ESP-IDF ADC 校准 API | 创建曲线拟合校准句柄。 | 用于把 raw 转成更接近真实的 mV。 |
+| `adc_oneshot_new_unit()` | ESP-IDF ADC oneshot API | 创建一次性采样 ADC unit。 | 低频电池采样适合 oneshot。 |
+| `adc_oneshot_config_channel()` | ESP-IDF ADC oneshot API | 配置 channel、位宽和衰减。 | `ADC_ATTEN_DB_12` 扩大可测输入范围。 |
+| `Adc_GetBatteryVoltage()` | `components/port_bsp/adc_bsp.cpp` | 读取 raw 并换算电池电压。 | 这里串起 raw、校准、分压倍率。 |
+| `Adc_GetBatteryLevel()` | `components/port_bsp/adc_bsp.cpp` | 把电压粗略映射成百分比。 | 示例中主循环未调用它，但 FactoryProgram 会用类似逻辑。 |
+
+## 关键代码讲解
+
+初始化时，demo 先创建 ADC 校准句柄：
+
+```cpp
+adc_cali_create_scheme_curve_fitting(...);
+```
+
+校准的作用是减少芯片 ADC 误差。没有校准时，`raw` 只能大致反映输入变化；有校准后，`adc_cali_raw_to_voltage()` 可以得到单位为 mV 的引脚电压。
+
+接着创建 oneshot unit：
+
+```cpp
+adc_oneshot_new_unit(...);
+adc_oneshot_config_channel(...);
+```
+
+`oneshot` 的意思是需要时读一次。电池电压变化很慢，不需要高速连续采样，所以 oneshot 比连续采样更直观。
+
+读取链路在 `Adc_GetBatteryVoltage()`：
+
+```cpp
+adc_oneshot_read(...);
+adc_cali_raw_to_voltage(...);
+vol = 0.001 * tage * 3;
+```
+
+这行换算可以拆开理解：
+
+```text
+tage        -> 校准后的 ADC 引脚电压，单位 mV
+0.001       -> mV 转 V
+* 3         -> 按板载分压倍率还原为电池电压
+```
+
+百分比估算使用线性区间：
+
+```text
+percent = (voltage - 3.0) / (4.12 - 3.0) * 100
+```
+
+这只是显示层的粗略估计。真实产品中建议对电压做滑动平均或 EMA，并根据电池放电曲线调整百分比映射。
+
+## 实验现象
+
+运行后，串口会先打印：
 
 ```text
 adc-example run
 ```
 
-之后每秒打印一次类似内容：
+随后每秒打印一次类似：
 
 ```text
 Adc Value:1234,Batt Voltage:3.700000
 ```
 
-`Adc Value` 是 ADC 原始值，`Batt Voltage` 是 demo 换算后的电池电压，单位是 V。
+`Adc Value` 是原始 ADC 数字值，`Batt Voltage` 是换算后的电池电压，单位是 V。
 
-## 核心流程
+## 常见问题
 
-核心流程可以直接读成一句话：
+| 现象 | 可能原因 | 排查方式 |
+| --- | --- | --- |
+| 把 raw 当电压 | `raw` 只是 ADC 原始数字。 | 必须经过 `adc_cali_raw_to_voltage()`。 |
+| 电压只有真实电池的三分之一 | 读到的是分压点电压。 | 需要按电阻分压倍率还原，本 demo 是 `* 3`。 |
+| 电量百分比跳动 | ADC 采样和电池负载都会波动。 | 后续可加多次平均或 EMA。 |
+| 百分比不准 | 锂电池电压曲线非线性。 | demo 公式只适合粗略显示。 |
+| 想判断正在充电 | 当前 ADC demo 没有充电状态读取。 | 需要额外的 CHG/STAT GPIO、PMIC 或充电 IC 信息。 |
 
-```text
-app_main -> UserApp_AppInit -> Adc_PortInit -> Adc_LoopTask -> Adc_GetBatteryVoltage
-```
+## 工程迁移思路
 
-更细一点：
-
-1. `UserApp_AppInit()` 打印启动信息。
-2. `Adc_PortInit()` 建立 ADC 校准句柄和 oneshot 读取句柄。
-3. `Adc_PortInit()` 配置 `ADC_CHANNEL_3`。
-4. `Adc_LoopTask()` 每秒调用 `Adc_GetBatteryVoltage(&data)`。
-5. `Adc_GetBatteryVoltage()` 读取 raw，校准成 mV，再乘以分压倍率 `3` 得到电池电压。
-6. 如果需要百分比，`Adc_GetBatteryLevel()` 再把电压映射到 `0~100`。
-
-## 关键代码讲解
-
-先看初始化。demo 在 `Adc_PortInit()` 里创建校准方案：
-
-```cpp
-adc_cali_create_scheme_curve_fitting(...)
-```
-
-这一步的作用是准备“raw 转 mV”的校准工具。没有这一步，你只能拿到 ADC 原始数字，很难直接当成真实电压使用。
-
-然后创建 oneshot ADC：
-
-```cpp
-adc_oneshot_new_unit(...)
-adc_oneshot_config_channel(...)
-```
-
-oneshot 的意思是“需要的时候读一次”。这个 demo 每秒读一次电池，不需要连续高速采样，所以 oneshot 很合适。
-
-读取时，demo 先拿 raw：
-
-```cpp
-adc_oneshot_read(...)
-```
-
-再把 raw 转成引脚电压的 mV：
-
-```cpp
-adc_cali_raw_to_voltage(...)
-```
-
-最后是最关键的换算链路：
-
-```cpp
-vol = 0.001 * tage * 3;
-```
-
-这里 `tage` 是校准后的 mV。`0.001` 把 mV 变成 V，`* 3` 是把 ADC 引脚上的分压电压还原成电池电压。
-
-百分比在 `Adc_GetBatteryLevel()` 里：
+迁移到产品时，建议把电池能力拆成两层：
 
 ```text
-< 3.0V  -> 0%
-> 4.12V -> 100%
-中间    -> (vol - 3.0) / 1.12 * 100
+PowerService
+  -> 读取 ADC raw
+  -> 校准为电压
+  -> 分压还原
+  -> 输出 snapshot: voltage_mv / percent / valid
+
+AppModel/UI
+  -> 根据 percent 显示电池图标
+  -> 根据 charging 字段显示充电图标
+  -> 根据低电阈值给出提示
 ```
 
-注意：这个官方 demo 只读取电池电压和估算电量百分比，没有读取充电状态。也就是说，它不能告诉你“正在充电 / 已充满 / 未充电”，只能根据电压推测大概电量。
-
-## 动手改一改
-
-先做最小改动，适合零基础练手：
-
-1. 把 `Adc_LoopTask()` 里的延时从 `1000ms` 改成 `2000ms`，观察串口是不是 2 秒打印一次。
-2. 在日志里加上 `Adc_GetBatteryLevel()` 的结果，显示电量百分比。
-3. 修改 `3.0` 和 `4.12` 两个阈值，观察百分比变化，但不要把它当成真实电池曲线。
-
-建议一次只改一个地方。能跑起来、能解释现象，比一次改很多更重要。
-
-## 常见坑
-
-- 把 `raw` 当成电压：`raw` 只是原始数字，必须经过校准和换算。
-- 忘记分压倍率：校准得到的是 ADC 引脚电压，不一定等于电池电压；这个 demo 用 `* 3` 还原。
-- 认为百分比很精确：demo 的百分比是线性估算，真实锂电池放电曲线不是直线。
-- 误以为能判断充电状态：demo 没有充电 IC 状态脚或寄存器读取逻辑。
-- 采样跳动就以为坏了：ADC 数值轻微波动很常见，可以后续做平均滤波。
-
-## 和 Pixel Soul 项目的关系
-
-Pixel Soul 如果要显示电池图标，第一步不是做漂亮 UI，而是先拿到稳定的电池电压。
-
-这个 demo 可以作为 Pixel Soul 电池模块的最小事实来源：它说明了板子上电池电压从哪里读、如何从 raw 变成 V、如何估算百分比。但 Pixel Soul 真正使用时，建议把“读取电压”和“估算 UI 电量”分开：底层只负责读电压，上层再决定显示几格电、什么时候提示低电量。
-
-如果以后要显示充电状态，需要另找硬件依据，例如充电芯片状态引脚、PMIC 寄存器或板级原理图。不要从这个 ADC demo 里推断充电状态。
+底层服务只负责事实采集，不直接决定 UI 显示几格电。充电状态也不应该靠电压趋势猜测，最好来自硬件状态脚或电源管理芯片。
 
 ## 补充阅读
 
-- [ESP-IDF v5.5.3：ADC Oneshot Mode Driver](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/api-reference/peripherals/adc_oneshot.html)
-- [ESP-IDF v5.5.3：ADC Calibration Driver](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/api-reference/peripherals/adc_calibration.html)
-- [Waveshare ESP32-S3-RLCD-4.2 资料页](https://docs.waveshare.com/ESP32-S3-RLCD-4.2/)
+- [ESP-IDF ADC Oneshot Mode Driver](https://docs.espressif.com/projects/esp-idf/zh_CN/v5.5.3/esp32s3/api-reference/peripherals/adc_oneshot.html)
+- [ESP-IDF ADC Calibration Driver](https://docs.espressif.com/projects/esp-idf/zh_CN/v5.5.3/esp32s3/api-reference/peripherals/adc_calibration.html)
+- [Waveshare ESP32-S3-RLCD-4.2 资料页](https://docs.waveshare.com/ESP32-S3-RLCD-4.2)

@@ -1,160 +1,163 @@
+﻿---
+title: ESP32-S3-RLCD SD Card 示例拆解
+description: 从 SDMMC、FATFS、挂载点和文件读写入手，读懂 06_SD_Card 如何挂载 SD 卡并读写文件。
 ---
-title: ESP32-S3-RLCD SD 卡读写入门
-description: 从 0 开始看懂 Waveshare ESP32-S3-RLCD-4.2 Demo 里如何用 SDMMC 1-bit 模式挂载 FATFS，并读写 SD 卡文件。
----
 
-## 一句话目标
+## 一句话定位
 
-把 SD 卡挂载成 `/sdcard` 目录，然后像在电脑上读写文件一样，用 `fopen()`、`fwrite()`、`fread()` 循环写入并读回 `writeTest.txt`。
+`06_SD_Card` 演示通过 SDMMC 1-bit 模式挂载 SD 卡到 `/sdcard`，再用标准 C 文件 API 写入和读取测试文件。
 
-## 先懂概念
+## 基础原理
 
-SD 卡不是普通 GPIO 外设，它需要专门的 SD/MMC 主机控制器通信。ESP-IDF 提供 `SDMMC_HOST_DEFAULT()` 和 `esp_vfs_fat_sdmmc_mount()`，可以把底层 SDMMC 通信、分区识别、FAT 文件系统和 VFS 路径一次接起来。
-
-SDMMC 有多线模式。这个 Demo 使用 `1-bit`，也就是只用 `CLK`、`CMD`、`D0` 三根主要信号线。它比 4-bit 慢，但布线更简单，也更适合先把 Demo 跑通。
-
-FATFS 是嵌入式里常用的 FAT 文件系统实现。VFS 是 ESP-IDF 的虚拟文件系统层。挂载成功后，应用代码不需要每次直接操作 SD 卡扇区，而是可以访问 `/sdcard/writeTest.txt` 这样的路径。
-
-## 硬件/代码入口
-
-事实来源目录：
-
-`D:\Tools\ESP-IDF\ESP32-S3-RLCD-4.2-Demo\ESP32-S3-RLCD-4.2-Demo\02_ESP-IDF\06_SD_Card`
-
-关键入口：
-
-- `main/main.cpp`：`app_main()` 只调用 `UserApp_AppInit()`。
-- `components/user_app/user_app.cpp`：创建 `CustomSDPort("/sdcard")`，启动 `Fatfs_LoopTask`。
-- `components/port_bsp/sdcard_bsp.h`：定义 SD 卡 BSP 类和默认引脚。
-- `components/port_bsp/sdcard_bsp.cpp`：挂载 SD 卡，并封装文件读写。
-
-默认引脚来自 `CustomSDPort` 构造函数：
-
-```cpp
-CustomSDPort(const char *SdName, int clk = 38, int cmd = 21, int d0 = 39, int width = 1);
-```
-
-也就是说这个 Demo 默认使用：
-
-- `CLK = GPIO38`
-- `CMD = GPIO21`
-- `D0 = GPIO39`
-- `width = 1`
-- 挂载点：`/sdcard`
-
-## 运行现象
-
-挂载成功后，`sdmmc_card_print_info(stdout, sdcard_host)` 会打印 SD 卡信息，例如卡类型、容量、速度等。随后任务会每轮写入一行文本，再读出来打印：
+SD 卡在 ESP-IDF 中通常分两层理解：
 
 ```text
-rtest:sdcard_writeTest : 1
-rtest:sdcard_writeTest : 2
+SDMMC host/slot
+  -> 负责和 SD 卡硬件通信
+
+FATFS/VFS
+  -> 把 SD 卡挂载成路径
+  -> 让应用用 fopen/fread/fwrite 读写文件
 ```
 
-数字会持续递增。文件路径是：
+`esp_vfs_fat_sdmmc_mount()` 是一个高层便捷函数：它帮应用初始化 SDMMC、挂载 FAT 文件系统，并把挂载点注册到 VFS。挂载成功后，应用就可以像在普通文件系统里一样使用 `/sdcard/xxx.txt`。
+
+## 硬件与工程入口
+
+源码阅读入口：
 
 ```text
-/sdcard/writeTest.txt
+02_ESP-IDF/06_SD_Card/main/main.cpp
+02_ESP-IDF/06_SD_Card/components/user_app/user_app.cpp
+02_ESP-IDF/06_SD_Card/components/port_bsp/sdcard_bsp.cpp
+02_ESP-IDF/06_SD_Card/components/port_bsp/sdcard_bsp.h
 ```
 
-如果 SD 卡没插好、格式不对、引脚不对或卡没有响应，挂载不会得到有效 `sdcard_host`，后续读写会打印 `SD card not initialized` 或 `SD card not ready`。
+关键硬件配置：
 
-## 核心流程
+| 项目 | 配置 |
+| --- | --- |
+| SD 模式 | SDMMC 1-bit |
+| CLK | GPIO38 |
+| CMD | GPIO21 |
+| D0 | GPIO39 |
+| 挂载点 | `/sdcard` |
+| 测试文件 | `/sdcard/writeTest.txt` |
+| `max_files` | `5` |
+| `format_if_mount_failed` | `false` |
+
+## 关键流程总图
 
 ```text
 app_main()
   -> UserApp_AppInit()
-  -> new CustomSDPort("/sdcard")
-  -> esp_vfs_fat_sdmmc_mount()
-  -> xTaskCreatePinnedToCore(Fatfs_LoopTask)
+      -> new CustomSDPort("/sdcard")
+          -> SDMMC_HOST_DEFAULT()
+          -> SDMMC_SLOT_CONFIG_DEFAULT()
+          -> 配置 CLK/CMD/D0 和 width=1
+          -> esp_vfs_fat_sdmmc_mount()
+          -> sdmmc_card_print_info()
+      -> xTaskCreatePinnedToCore(Fatfs_LoopTask, core 0)
+
+Fatfs_LoopTask()
   -> SDPort_WriteFile("/sdcard/writeTest.txt")
+      -> fopen("wb")
+      -> fwrite()
+      -> fclose()
   -> SDPort_ReadFile("/sdcard/writeTest.txt")
-  -> printf("rtest:%s")
+      -> fopen("rb")
+      -> fread()
+      -> fclose()
+  -> printf()
 ```
 
-主线只有三件事：挂载卡、写文件、读文件。
+## 关键方法速查
+
+| 函数/方法 | 所在文件 | 作用 | 初学者需要理解的点 |
+| --- | --- | --- | --- |
+| `app_main()` | `main/main.cpp` | ESP-IDF 应用入口。 | 只调用用户应用初始化。 |
+| `UserApp_AppInit()` | `components/user_app/user_app.cpp` | 创建 SD 卡对象并启动文件测试任务。 | 应用层只表达“读写文件”。 |
+| `CustomSDPort` | `components/port_bsp/sdcard_bsp.cpp` | 配置 SDMMC 并挂载 FATFS。 | 板级引脚和挂载细节集中在这里。 |
+| `SDMMC_HOST_DEFAULT()` | ESP-IDF SDMMC API | 创建默认 host 配置。 | host 表示 ESP32-S3 侧控制器。 |
+| `SDMMC_SLOT_CONFIG_DEFAULT()` | ESP-IDF SDMMC API | 创建默认 slot 配置。 | slot 表示 SD 卡接口资源。 |
+| `esp_vfs_fat_sdmmc_mount()` | ESP-IDF FATFS API | 挂载 SD 卡文件系统。 | 成功后才有 `/sdcard` 路径。 |
+| `SDPort_WriteFile()` | `components/port_bsp/sdcard_bsp.cpp` | 写入二进制文件。 | 内部使用标准 C `fopen/fwrite`。 |
+| `SDPort_ReadFile()` | `components/port_bsp/sdcard_bsp.cpp` | 读取文件内容。 | 读取前会检查卡状态。 |
+| `Fatfs_LoopTask()` | `components/user_app/user_app.cpp` | 周期写入并读回测试内容。 | 用于验证挂载和读写链路。 |
 
 ## 关键代码讲解
 
-挂载配置在 `CustomSDPort::CustomSDPort()`：
-
-```cpp
-mount_config.format_if_mount_failed = false;
-mount_config.max_files = 5;
-mount_config.allocation_unit_size = 16 * 1024 * 3;
-```
-
-`format_if_mount_failed = false` 很重要。它表示挂载失败时不要自动格式化 SD 卡。对初学者来说，这更安全，因为不会因为一次接线或格式问题误清空卡里的文件。
-
-SDMMC 主机和槽位配置：
+构造 SD 端口时，demo 先准备 host 和 slot：
 
 ```cpp
 sdmmc_host_t host = SDMMC_HOST_DEFAULT();
 sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
-slot_config.width = width;
-slot_config.clk = (gpio_num_t)clk;
-slot_config.cmd = (gpio_num_t)cmd;
-slot_config.d0 = (gpio_num_t)d0;
 ```
 
-这里选择 ESP32-S3 的 SDMMC host，并告诉驱动当前只用 1-bit 数据线。`CLK/CMD/D0` 必须和板子硬件连接一致。
-
-真正把 SD 卡变成 `/sdcard` 目录的是：
-
-```cpp
-esp_vfs_fat_sdmmc_mount(SdName_, &host, &slot_config, &mount_config, &sdcard_host);
-```
-
-这个函数同时完成 SDMMC 初始化、FATFS 挂载、VFS 注册。成功后，`sdcard_host` 非空，代码会打印卡信息并把 `is_SdcardInitOK` 设为 `1`。
-
-写文件在 `SDPort_WriteFile()`：
-
-```cpp
-FILE *f = fopen(path, "wb");
-fwrite(data, 1, data_len, f);
-fclose(f);
-```
-
-`"wb"` 表示以二进制写入方式打开文件。如果文件已存在，会覆盖旧内容。所以 Demo 里每次读回来的通常是最新一行，而不是完整历史。
-
-读文件在 `SDPort_ReadFile()`：先 `fseek()` 到末尾获取文件大小，再回到开头 `fread()`。调用者可以通过 `outLen` 拿到实际读取字节数。Demo 传了 `NULL`，说明它只关心字符串内容，不关心长度。
-
-## 动手改一改
-
-1. 改成追加写入：把 `SDPort_WriteFile()` 的打开模式从 `"wb"` 改为 `"ab"`，观察 `writeTest.txt` 是否累计多行。
-2. 改文件名：把 `/sdcard/writeTest.txt` 改成 `/sdcard/log.txt`，确认路径要以挂载点 `/sdcard` 开头。
-3. 打印读取长度：调用 `SDPort_ReadFile()` 时传入 `size_t outLen`，读完后打印字节数。
-4. 关闭写入测试：注释 `#define sdcard_write_Test`，观察任务只延时不读写。
-
-## 常见坑
-
-- SD 卡未格式化为 FAT：`esp_vfs_fat_sdmmc_mount()` 需要能识别 FAT 文件系统。初学者建议先在电脑上格式化为 FAT32。
-- `format_if_mount_failed` 误设为 `true`：这样挂载失败时可能格式化卡。做实验前务必确认卡里没有重要数据。
-- 1-bit/4-bit 搞混：Demo 默认 `width = 1`，只配置 `D0`；如果改成 4-bit，还要正确连接并配置更多数据线。
-- 引脚不匹配：`CLK=38`、`CMD=21`、`D0=39` 是这个 Demo 的默认值，换板子或飞线时必须重新核对。
-- 文件路径漏掉挂载点：应使用 `/sdcard/writeTest.txt`，不是 `writeTest.txt`。
-- 读入 buffer 太小：Demo 的 `rtest[45]` 只够读短字符串，读大文件时必须准备更大的 buffer 或分块读取。
-- 卡被拔出：代码用 `sdmmc_get_status(sdcard_host)` 检查状态，拔卡后可能出现 `SD card not ready`。
-
-## 和 Pixel Soul 项目的关系
-
-Pixel Soul 如果要保存配置、缓存音频、记录日志或存放表情资源，SD 卡就是一个外部持久化空间。它应该被封装成存储服务，而不是让业务模块到处直接 `fopen("/sdcard/...")`。
-
-推荐边界是：
+然后将总线宽度限制为 1-bit，并设置板级引脚：
 
 ```text
-Config / Cache / Log / Asset
-  -> StorageService
-  -> SD card BSP
-  -> ESP-IDF SDMMC + FATFS + VFS
+CLK -> GPIO38
+CMD -> GPIO21
+D0  -> GPIO39
+width = 1
 ```
 
-这样 SD 卡不存在时，StorageService 可以统一降级：配置使用默认值，缓存关闭，日志转串口，UI 仍然可以启动。
+挂载由一个高层 API 完成：
+
+```cpp
+esp_vfs_fat_sdmmc_mount(...);
+```
+
+它成功后，`/sdcard` 才成为可用路径。应用层的写文件函数就可以使用：
+
+```cpp
+fopen(path, "wb");
+fwrite(data, 1, len, file);
+```
+
+读文件则使用：
+
+```cpp
+fopen(path, "rb");
+fread(buffer, 1, size, file);
+```
+
+这说明 ESP-IDF 的 VFS 已经把底层 SD 卡抽象成了类 POSIX 文件系统接口。
+
+## 实验现象
+
+插入可用 SD 卡后，串口会打印 SD 卡信息，并周期写入和读取测试文件。读回内容会通过 `printf()` 输出。
+
+如果未插卡或文件系统无法挂载，挂载函数会返回错误。因为 `format_if_mount_failed=false`，demo 不会自动格式化 SD 卡。
+
+## 常见问题
+
+| 现象 | 可能原因 | 排查方式 |
+| --- | --- | --- |
+| 挂载失败 | 未插卡、卡损坏、文件系统不兼容、引脚不匹配。 | 先用电脑确认 SD 卡可读，建议 FAT32。 |
+| 没有 `/sdcard` 路径 | 挂载失败。 | 只有 `esp_vfs_fat_sdmmc_mount()` 成功后路径才存在。 |
+| 文件读写失败 | 卡状态异常或路径错误。 | 确认使用 `/sdcard/...` 前缀。 |
+| 希望失败时自动格式化 | 当前配置关闭自动格式化。 | 修改 `format_if_mount_failed` 前要确认不会误删数据。 |
+| 长期写日志卡顿 | SD 卡写入延迟不稳定。 | 产品代码应加缓存和异步写入策略。 |
+
+## 工程迁移思路
+
+产品中建议把 SD 卡封装成存储服务：
+
+```text
+SdService
+  -> init/mount
+  -> get_status
+  -> read/write/list
+  -> unmount
+  -> 错误降级和限频日志
+```
+
+业务层不应该到处直接写 `/sdcard/...`。统一封装后，可以集中处理“无卡、满卡、写失败、卸载、路径规范、并发访问”等问题。
 
 ## 补充阅读
 
-- [ESP-IDF v5.5.3 SDMMC Host Driver - ESP32-S3](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/api-reference/peripherals/sdmmc_host.html)
-- [ESP-IDF v5.5.3 FAT Filesystem Support - ESP32-S3](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/api-reference/storage/fatfs.html)
-- [ESP-IDF v5.5.3 Virtual Filesystem - ESP32-S3](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/api-reference/storage/vfs.html)
-- [ESP-IDF v5.5.3 SD/SDIO/MMC Driver - ESP32-S3](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/api-reference/storage/sdmmc.html)
-- [Waveshare ESP32-S3-RLCD-4.2 资料页](https://docs.waveshare.com/ESP32-S3-RLCD-4.2/)
+- [ESP-IDF SD/SDIO/MMC Driver](https://docs.espressif.com/projects/esp-idf/zh_CN/v5.5.3/esp32s3/api-reference/peripherals/sdmmc_host.html)
+- [ESP-IDF FATFS](https://docs.espressif.com/projects/esp-idf/zh_CN/v5.5.3/esp32s3/api-reference/storage/fatfs.html)
+- [Waveshare ESP32-S3-RLCD-4.2 资料页](https://docs.waveshare.com/ESP32-S3-RLCD-4.2)
