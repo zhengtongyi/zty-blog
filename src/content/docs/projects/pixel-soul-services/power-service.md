@@ -56,7 +56,7 @@ voltage = calibrated_adc_mv * 3
 4120mV -> 100%
 ```
 
-充电状态不靠“电压是否上升”推断，而是优先使用充电芯片 `CHG/STAT` GPIO。如果该 GPIO 未确认或未配置，则 `charge_valid=false`，UI 不显示充电图标。
+充电状态不靠“电压是否上升”推断，而是优先使用充电芯片 `CHG/STAT` 这类硬件状态信号。如果该信号没有接到 ESP32 GPIO，固件就读不到，只能保持 `charge_valid=false`，UI 不显示充电图标。
 
 这里最容易混淆的是 `charging=false` 和 `charge_valid=false`：
 
@@ -232,6 +232,182 @@ power_update_snapshot()
 
 这样读代码的人打开 `power_sample_once()` 就能看到业务主线：采样、换算、更新、通知。
 
+## 关键方法：电池 ADC 采样
+
+电池 ADC 采样这一步只负责得到“ADC 引脚上的校准电压”，不要在这里直接推导电池百分比。把这个动作单独收敛出来，后续读代码会很清楚：
+
+```c
+static esp_err_t power_read_adc_mv(uint16_t *out_adc_mv);
+```
+
+它依赖 PowerService 初始化阶段准备好的三个资源：
+
+```text
+adc_oneshot_unit_handle_t adc_unit
+adc_cali_handle_t adc_cali
+SERVICE_POWER_BAT_ADC_CHANNEL
+```
+
+返回值 `out_adc_mv` 表示 ADC 引脚端电压，单位是 mV。注意，这个值是分压后的电压，还不是电池实际电压。
+
+流程可以按这 6 步理解：
+
+```text
+1. 确认 ADC 已初始化，例如 adc_ready=true。
+2. 调用 adc_oneshot_read(adc_unit, channel, &raw)，得到 ADC raw。
+3. raw 读取失败时返回错误，不更新 snapshot。
+4. 调用 adc_cali_raw_to_voltage(adc_cali, raw, &adc_mv)，得到校准后的 ADC mV。
+5. 校准失败时返回错误，不绕过校准直接用 raw 猜电压。
+6. adc_mv 合法后写入 out_adc_mv，返回 ESP_OK。
+```
+
+伪代码：
+
+```c
+static esp_err_t power_read_adc_mv(uint16_t *out_adc_mv)
+{
+    if (!out_adc_mv || !s_power_ctx.adc_ready) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int raw = 0;
+    esp_err_t err = adc_oneshot_read(s_power_ctx.adc_unit,
+                                     SERVICE_POWER_BAT_ADC_CHANNEL,
+                                     &raw);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    int adc_mv = 0;
+    err = adc_cali_raw_to_voltage(s_power_ctx.adc_cali, raw, &adc_mv);
+    if (err != ESP_OK || adc_mv <= 0) {
+        return err == ESP_OK ? ESP_ERR_INVALID_RESPONSE : err;
+    }
+
+    *out_adc_mv = (uint16_t)adc_mv;
+    return ESP_OK;
+}
+```
+
+为什么 v1 用 oneshot，而不是 continuous ADC：
+
+```text
+1. 电池电压是慢变量，不需要持续高速采样。
+2. 状态栏只要粗略电量，不需要波形数据。
+3. ESP32-S3-RLCD-4.2 的官方 ADC 示例也是 oneshot 读取。
+4. oneshot 流程更短，更适合先验证硬件接线和换算基线。
+```
+
+如果实机看到电量跳动明显，可以在 v2 增加多次采样平均或中值滤波，但主流程仍然不要变成 UI 触发硬件读。UI/AppModel 只读 snapshot，采样由 PowerService 自己周期执行。
+
+## 关键方法：ADC 电压换算为电池电压
+
+`adc_cali_raw_to_voltage()` 得到的是 ADC 引脚端电压，不是电池原始电压。因为电池电压通常高于 ADC 安全输入范围，所以板子会先用分压电阻把电池电压降下来：
+
+```text
+VBAT
+  -> R_up
+  -> ADC node
+  -> R_down
+  -> GND
+```
+
+分压公式是：
+
+```text
+adc_mv = battery_mv * R_down / (R_up + R_down)
+battery_mv = adc_mv * (R_up + R_down) / R_down
+```
+
+当前草案沿用 ESP32-S3-RLCD-4.2 官方 ADC 示例里的 `* 3` 作为硬件基线，可以理解为：
+
+```text
+R_up = 200K
+R_down = 100K
+divider_ratio = (200K + 100K) / 100K = 3.0
+battery_mv = adc_mv * 3.0
+```
+
+建议把这一步写成独立方法：
+
+```c
+static uint16_t power_adc_mv_to_battery_mv(uint16_t adc_mv);
+```
+
+伪代码：
+
+```c
+static uint16_t power_adc_mv_to_battery_mv(uint16_t adc_mv)
+{
+    float battery_mv = adc_mv * SERVICE_POWER_BAT_DIVIDER_RATIO;
+
+    if (battery_mv < 0) {
+        return 0;
+    }
+    if (battery_mv > UINT16_MAX) {
+        return UINT16_MAX;
+    }
+    return (uint16_t)(battery_mv + 0.5f);
+}
+```
+
+这里最重要的是区分三个量：
+
+```text
+raw:
+  ADC 原始码值，不直接代表真实电压。
+
+adc_mv:
+  ADC 引脚端校准电压，已经经过 ADC calibration，但仍是分压后的电压。
+
+battery_mv:
+  按硬件分压比例还原出来的电池实际电压估算值。
+```
+
+如果 ADC calibration 失败，不建议直接拿 raw 做线性换算。raw 到真实电压的关系受芯片、衰减、校准参数影响，绕过校准会让状态栏电量更飘。
+
+## 关键方法：电池电压估算百分比
+
+百分比是给 UI 看懂的显示估算，不是精密 SOC。v1 可以先用线性映射，方法单独收敛成：
+
+```c
+static uint8_t power_battery_mv_to_percent(uint16_t battery_mv);
+```
+
+公式：
+
+```text
+percent = (battery_mv - empty_mv) * 100 / (full_mv - empty_mv)
+percent = clamp(percent, 0, 100)
+```
+
+默认区间先沿用官方 ADC 示例：
+
+```text
+empty_mv = 3000
+full_mv  = 4120
+```
+
+伪代码：
+
+```c
+static uint8_t power_battery_mv_to_percent(uint16_t battery_mv)
+{
+    if (battery_mv <= SERVICE_POWER_EMPTY_MV) {
+        return 0;
+    }
+    if (battery_mv >= SERVICE_POWER_FULL_MV) {
+        return 100;
+    }
+
+    uint32_t span = SERVICE_POWER_FULL_MV - SERVICE_POWER_EMPTY_MV;
+    uint32_t used = battery_mv - SERVICE_POWER_EMPTY_MV;
+    return (uint8_t)((used * 100U + span / 2U) / span);
+}
+```
+
+这一步要明确告诉自己：线性百分比只是状态栏估算。锂电池电压和剩余容量不是线性关系，而且还会受负载、电池内阻、温度和老化影响。没有 fuel gauge 或实机放电曲线前，v1 先追求“显示方向正确、便于校准”，不要假装它是精密电量计。
+
 ## Snapshot 设计
 
 PowerService 对上层暴露的核心数据结构可以是：
@@ -307,6 +483,8 @@ esp_err_t power_service_set_event_callback(power_service_event_cb_t cb, void *us
 
 第六，配置项保留校准空间。`EMPTY_MV/FULL_MV/DIVIDER_RATIO` 不是随便抽象，而是为了后续实机校准时不用改 UI 和上层数据流。
 
+第七，充电 LED 和固件充电状态是两件事。板上 `CHG` LED 可以由 ETA6098 的 `STAT` 脚自己点亮，但如果 `STAT` 没有接到 ESP32 GPIO，固件仍然不知道 LED 是否亮，也就不能把它投影为 `charging=true`。
+
 ## 当前项目实现
 
 当前状态：设计草案/待实现。
@@ -316,7 +494,9 @@ esp_err_t power_service_set_event_callback(power_service_event_cb_t cb, void *us
 - 存在 `POWER_SERVICE_MODULE.md` 设计文档。
 - service public include 中尚未存在 PowerService 对外头文件。
 - 当前草案建议参考官方 ADC demo 的 ADC1 Channel 3。
-- 草案默认 `SERVICE_POWER_CHG_GPIO = GPIO_NUM_NC`，因为 `CHG/STAT` 是否接入 ESP32 GPIO 尚未确认。
+- 板卡通过 Type-C 输入并由 ETA6098 充电芯片给电池充电。
+- 板载 `CHG` LED 由 ETA6098 `STAT` 指示支路驱动；当前没有确认 `STAT` 再接到 ESP32 GPIO。
+- 草案默认 `SERVICE_POWER_CHG_GPIO = GPIO_NUM_NC`，因此 `charge_valid=false`、`charging=false`，UI 不显示 `LV_SYMBOL_CHARGE`。
 - v1 只计划覆盖状态栏电量和可选充电图标，不做完整 PMIC 管理。
 
 草案 snapshot：
@@ -424,6 +604,71 @@ UI:
 
 这样未充电时不会影响原有 Wi-Fi 和电池图标；正在充电时只额外显示 charge 图标。
 
+## Type-C 充电与 CHG 指示灯
+
+当前板卡的充电入口是 Type-C。Type-C 并不直接等于“ESP32 能知道正在充电”，中间还有充电芯片和状态指示支路。
+
+真正的大电流充电路径可以这样理解：
+
+```text
+Type-C VBUS
+  -> ETA6098 VIN
+  -> ETA6098 开关充电电路
+  -> L1 电感
+  -> B+ / 电池
+```
+
+而板上的 `CHG` 指示灯是旁边的一条小电流显示支路：
+
+```text
+B+ / 电源侧
+  -> 限流电阻
+  -> CHG LED
+  -> ETA6098 STAT
+  -> 芯片内部下拉到 GND
+```
+
+`ETA6098 STAT` 的典型状态是：
+
+```text
+正在充电:
+  STAT = low
+  电流流过 限流电阻 -> CHG LED -> STAT -> GND
+  LED 亮
+
+充电完成 / 不在充电:
+  STAT = high-Z
+  LED 回路断开
+  LED 灭
+```
+
+所以这里有一个很关键的结论：
+
+```text
+CHG LED 亮灭:
+  由充电芯片自己控制，人眼可见。
+
+PowerService charging:
+  必须来自 ESP32 能读取到的 GPIO。
+
+当前板卡事实:
+  现有资料只确认 CHG LED 和充电电路。
+  尚未确认 ETA6098 STAT 接到 ESP32 GPIO。
+  因此固件默认不知道 CHG LED 是否亮。
+```
+
+如果未来要让 ESP32 读取充电状态，硬件上需要把 `STAT` 或等价状态节点接到一个 GPIO。这里要注意：
+
+```text
+1. STAT 是开漏/高阻输出，需要上拉。
+2. 如果并联读取现有 CHG LED/STAT 节点，需要确认电平范围。
+3. 要评估上拉来源和关机反灌电风险。
+4. 软件上通常可以按低电平表示 charging，高电平表示 not charging 或 done。
+5. 最终有效电平必须以原理图和实机测量为准。
+```
+
+这也是为什么 PowerService 草案里 `SERVICE_POWER_CHG_GPIO` 默认是 `GPIO_NUM_NC`：没有 GPIO 依据时，就不要把 `CHG` LED 的物理存在误写成固件可读状态。
+
 ## 失败收口
 
 PowerService v1 推荐按“尽量不阻塞 App”处理：
@@ -449,6 +694,8 @@ CHG GPIO 初始化失败：
 - 本文是设计草案/待实现，不能在复习或面试中说“当前 PowerService 已经落地”。
 - 不要复用旧 ADC 文的结论替代项目事实；真正实现时要以当前板卡 demo、BSP 配置和实机测量为准。
 - `CHG/STAT` GPIO 未确认前，默认 `charge_valid=false`，不要假装能判断充电状态。
+- `CHG` LED 亮灭不等于固件可读 charging；当前没有确认 `STAT` 接到 ESP32 GPIO。
+- Type-C 充电路径和 `CHG` LED 指示支路是两条不同路径，不要把 LED 支路理解成大电流充电路径。
 - 电池百分比线性映射只是状态栏粗略估算，不是精密电量计。
 - `SERVICE_POWER_BAT_DIVIDER_RATIO = 3.0f` 是按 `200K + 100K` 分压假设，需要原理图或实测确认。
 - ADC 采样应使用校准后的 mV，不应直接拿 raw 值估算电池电压。
@@ -491,13 +738,23 @@ CHG GPIO 初始化失败：
 
 答：`charge_valid=false`，UI 不显示 charge 图标。不要通过电压上升去猜充电，否则负载变化和采样间隔很容易造成误判。
 
+**问：板上有 CHG 指示灯，为什么 ESP32 还不知道 charging？**
+
+答：因为 `CHG` LED 是 ETA6098 的 `STAT` 脚自己驱动的指示支路。它可以让人眼看到正在充电，但如果 `STAT` 没有额外接到 ESP32 GPIO，固件就读不到这个状态。PowerService 只能把 `charge_valid` 保持为 `false`。
+
+**问：Type-C 充电路径和 CHG LED 支路有什么区别？**
+
+答：Type-C VBUS 进入 ETA6098，再通过开关充电电路、电感到 B+ / 电池，这是实际充电路径。`CHG` LED 支路只是 B+ 侧分出的一条小电流显示回路，经过限流电阻、LED、`STAT` 到地，不负责给电池充电。
+
 ## 复习检查表
 
 - [ ] 明确说出 PowerService 是设计草案/待实现。
 - [ ] 能解释 ADC raw、校准 mV、分压换算、电池电压之间的关系。
+- [ ] 能写出 `power_read_adc_mv()`、`power_adc_mv_to_battery_mv()`、`power_battery_mv_to_percent()` 三个方法的伪代码。
 - [ ] 能写出 `3000mV-4120mV` 线性百分比的基本公式。
 - [ ] 能说明 `charge_valid=false` 的含义。
 - [ ] 能解释为什么不靠电压趋势推断充电。
+- [ ] 能解释 Type-C 充电路径和 CHG LED 指示支路的区别。
 - [ ] 能区分 PowerService 观测职责和 PowerPolicy 策略职责。
 - [ ] 能列出实现前必须确认的 `CHG/STAT` GPIO、有效电平和分压比例。
 - [ ] 能说明 `get_snapshot()` 为什么读取缓存而不是直接采样。
