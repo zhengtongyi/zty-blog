@@ -1,0 +1,69 @@
+<zty-theme-toggle>
+  <button type="button" class="theme-toggle" aria-label="切换明暗主题" title="切换明暗主题">
+    <svg class="theme-icon light-icon" aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm0-16a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V3a1 1 0 0 1 1-1Zm0 18a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0v-1a1 1 0 0 1 1-1ZM4.93 4.93a1 1 0 0 1 1.41 0l.71.71a1 1 0 1 1-1.41 1.41l-.71-.71a1 1 0 0 1 0-1.41Zm12.02 12.02a1 1 0 0 1 1.41 0l.71.71a1 1 0 0 1-1.41 1.41l-.71-.71a1 1 0 0 1 0-1.41ZM2 12a1 1 0 0 1 1-1h1a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1Zm18 0a1 1 0 0 1 1-1h1a1 1 0 1 1 0 2h-1a1 1 0 0 1-1-1ZM4.93 19.07a1 1 0 0 1 0-1.41l.71-.71a1 1 0 1 1 1.41 1.41l-.71.71a1 1 0 0 1-1.41 0ZM16.95 7.05a1 1 0 0 1 0-1.41l.71-.71a1 1 0 1 1 1.41 1.41l-.71.71a1 1 0 0 1-1.41 0Z" />
+    </svg>
+    <svg class="theme-icon dark-icon" aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M21 14.31A8.5 8.5 0 0 1 9.69 3a1 1 0 0 0-1.11-1.48A10.5 10.5 0 1 0 22.48 15.4 1 1 0 0 0 21 14.31Z" />
+    </svg>
+  </button>
+</zty-theme-toggle>
+
+<script>
+  class ZtyThemeToggle extends HTMLElement {
+    connectedCallback() {
+      const button = this.querySelector('button');
+      if (!button) return;
+
+      const sync = () => {
+        const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+        button.dataset.theme = theme;
+        button.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+      };
+
+      button.addEventListener('click', () => {
+        window.StarlightThemeProvider?.toggleTheme();
+        sync();
+      });
+      window.addEventListener('zty-theme-change', sync);
+      sync();
+    }
+  }
+
+  if (!customElements.get('zty-theme-toggle')) {
+    customElements.define('zty-theme-toggle', ZtyThemeToggle);
+  }
+</script>
+
+<style>
+  @layer starlight.components {
+    .theme-toggle {
+      display: inline-grid;
+      place-items: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--sl-color-gray-2);
+      cursor: pointer;
+    }
+
+    .theme-toggle:hover {
+      color: var(--sl-color-white);
+      background: var(--sl-color-gray-6);
+    }
+
+    .theme-icon {
+      grid-area: 1 / 1;
+      width: 1rem;
+      height: 1rem;
+      fill: currentColor;
+    }
+
+    .theme-toggle[data-theme='dark'] .dark-icon,
+    .theme-toggle[data-theme='light'] .light-icon {
+      display: none;
+    }
+  }
+</style>

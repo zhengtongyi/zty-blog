@@ -13,6 +13,10 @@ export default defineConfig({
       title: 'ZTY Blog',
       description: '嵌入式、AIoT 与 AI Agent 的学习笔记。',
       customCss: ['./src/styles/custom.css'],
+      components: {
+        ThemeProvider: './src/components/ThemeProvider.astro',
+        ThemeSelect: './src/components/ThemeToggle.astro',
+      },
       social: [
         {
           icon: 'github',
@@ -52,6 +56,15 @@ export default defineConfig({
             { label: 'Protocol + WebSocketTask', slug: 'projects/pixel-soul-services/protocol-websocket' },
             { label: 'TTSPlayer', slug: 'projects/pixel-soul-services/tts-player' },
             { label: 'PowerService 草案', slug: 'projects/pixel-soul-services/power-service' },
+          ],
+        },
+        {
+          label: 'Pixel Soul 全链路复盘',
+          items: [
+            { label: '复盘总览', slug: 'projects/pixel-soul-review' },
+            { label: '设备侧', slug: 'projects/pixel-soul-review/device-side' },
+            { label: '云端 Cloud New', slug: 'projects/pixel-soul-review/cloud-side' },
+            { label: 'Pi Agent Gateway', slug: 'projects/pixel-soul-review/pi-agent-gateway' },
           ],
         },
         {

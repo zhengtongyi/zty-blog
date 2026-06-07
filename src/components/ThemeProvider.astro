@@ -1,0 +1,31 @@
+{/* Keep the docs readable by defaulting to dark while still allowing a light toggle. */}
+<script is:inline>
+  window.StarlightThemeProvider = (() => {
+    const storageKey = 'starlight-theme';
+    const storedTheme =
+      typeof localStorage !== 'undefined' && localStorage.getItem(storageKey);
+    const initialTheme = storedTheme === 'light' ? 'light' : 'dark';
+
+    function applyTheme(theme) {
+      const nextTheme = theme === 'light' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = nextTheme;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(storageKey, nextTheme);
+      }
+      window.dispatchEvent(new CustomEvent('zty-theme-change', { detail: nextTheme }));
+    }
+
+    applyTheme(initialTheme);
+
+    return {
+      getTheme() {
+        return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+      },
+      setTheme: applyTheme,
+      toggleTheme() {
+        applyTheme(this.getTheme() === 'dark' ? 'light' : 'dark');
+      },
+      updatePickers() {},
+    };
+  })();
+</script>
