@@ -1,22 +1,26 @@
 ---
 title: Pixel Soul PowerService 复习笔记（设计草案/待实现）
-description: 复习 PowerService 的设计草案、ADC 电池采样、充电状态 GPIO、snapshot 边界和后续实现注意点。
+description: 复习 PowerService 的设计草案、ADC 电池采样、电量 UI 联动、Type-C 充电指示灯边界和后续实现注意点。
 ---
 
 > 当前 PowerService 是设计草案/待实现：ESP32 service public include 目录中尚未存在对应头文件，也没有已落地的 PowerService 代码。本文只能作为后续实现和面试表达的设计笔记，不能当作已完成模块说明。
 
 ## 一句话定位
 
-PowerService 计划把电池 ADC 采样和可选充电状态 GPIO 封装成“电源观测 Service”，给 AppModel/UI 提供稳定的电压、电量百分比和充电状态 snapshot。
+PowerService 计划把电池 ADC 采样封装成“电源观测 Service”，给 AppModel/UI 提供稳定的电压和电量百分比 snapshot。当前板卡没有确认可供 ESP32 读取的充电状态 GPIO，所以右上角 UI 只做电量变化，不显示充电图标。
 
 更直白地说，它不是“电源管理大脑”，而是一个硬件事实采集器：
 
 ```text
-ADC / CHG GPIO
+BAT_ADC
   -> PowerService
   -> power_snapshot_t
   -> AppModel
-  -> 右上角电池图标 / 充电图标
+  -> 右上角电池图标
+
+Type-C 旁 CHG LED
+  -> 由充电芯片自己驱动
+  -> 用户肉眼判断是否正在充电
 ```
 
 所以 PowerService 的职责是把底层硬件读数整理成上层好理解的数据。它不决定 UI 画什么，不决定低电关机，也不控制充电器。
@@ -56,16 +60,16 @@ voltage = calibrated_adc_mv * 3
 4120mV -> 100%
 ```
 
-充电状态不靠“电压是否上升”推断，而是优先使用充电芯片 `CHG/STAT` 这类硬件状态信号。如果该信号没有接到 ESP32 GPIO，固件就读不到，只能保持 `charge_valid=false`，UI 不显示充电图标。
+充电状态不靠“电压是否上升”推断。当前板卡虽然有 Type-C 充电口和 `CHG` 指示灯，但没有确认 `CHG/STAT` 接到 ESP32 GPIO，所以固件读不到充电状态。UI 设计上应保持 `charge_valid=false`，不显示充电图标；用户根据 Type-C 口附近的 `CHG` LED 自行判断是否正在充电。
 
 这里最容易混淆的是 `charging=false` 和 `charge_valid=false`：
 
 ```text
 charge_valid=false:
-  不知道是否正在充电，因为没有硬件依据。
+  固件不知道是否正在充电，因为没有 GPIO 硬件依据。
 
 charge_valid=true && charging=false:
-  已经读取到 CHG/STAT，明确当前不在充电。
+  未来硬件接入 CHG/STAT 后，才表示已经读取到充电状态并明确当前不在充电。
 ```
 
 这个区别很重要。未知状态不能被 UI 或 App 直接当成“未充电”。
@@ -89,14 +93,13 @@ PowerService 负责：
 
 ```text
 1. 初始化电池 ADC 采样资源。
-2. 初始化可选 CHG/STAT GPIO。
-3. 周期读取 ADC raw。
-4. 使用 ADC calibration 得到 ADC 输入端 mV。
-5. 乘以分压比例，换算为电池实际电压。
-6. 把电池电压估算为 0-100%。
-7. 读取可选充电 GPIO，判断 charging。
-8. 维护 power_snapshot_t。
-9. snapshot 变化时通知 App。
+2. 周期读取 ADC raw。
+3. 使用 ADC calibration 得到 ADC 输入端 mV。
+4. 乘以分压比例，换算为电池实际电压。
+5. 把电池电压估算为 0-100%。
+6. 维护 power_snapshot_t。
+7. snapshot 变化时通知 App。
+8. 未来硬件接入 CHG/STAT GPIO 后，可选读取充电状态。
 ```
 
 PowerService 不负责：
@@ -118,7 +121,7 @@ PowerService 不负责：
 
 ```text
 BSP:
-  描述板子上电池 ADC 和 CHG GPIO 接在哪里。
+  描述板子上电池 ADC 接在哪里；如果未来接入 CHG/STAT GPIO，也在 BSP 中描述。
 
 PowerService:
   描述这个服务如何采样、换算、估算和通知。
@@ -174,7 +177,7 @@ Init ADC/GPIO
 ```text
 Init
   -> 初始化 ADC oneshot 和 ADC calibration
-  -> 如果配置了 CHG GPIO，则初始化 GPIO 输入
+  -> 当前不初始化 CHG GPIO；未来配置了 CHG GPIO 时再初始化 GPIO 输入
   -> 初始化 power_snapshot_t 默认值
 
 Start
@@ -185,7 +188,7 @@ Sample Loop
   -> raw ADC 转 calibrated mV
   -> multiplied by divider ratio 得到 voltage_mv
   -> voltage_mv 映射到 percent
-  -> 读取 charging 状态
+  -> 当前不读取 charging 状态
   -> snapshot 有变化时通知 AppCore/AppModel
 ```
 
@@ -195,7 +198,7 @@ Sample Loop
 PowerService snapshot
   -> AppModel status model
   -> UI status bar
-  -> battery icon / charge icon
+  -> battery icon
 ```
 
 最终模块实现后，核心函数应该长这样，而不是把主流程藏在一堆嵌套 helper 里：
@@ -500,9 +503,9 @@ esp_err_t power_service_set_event_callback(power_service_event_cb_t cb, void *us
 
 第二，电量是慢变量，不需要高频采样。草案默认 30 秒采样一次，足够支撑状态栏显示，也避免 ADC 和 UI 频繁刷新。
 
-第三，充电状态必须有明确硬件依据。用电压趋势推断充电响应慢、容易受负载波动影响，所以 v1 不采用。
+第三，充电状态必须有明确硬件依据。当前 `CHG` LED 只是硬件指示灯，固件没有确认可读 GPIO，因此 v1 UI 不显示充电图标；用电压趋势推断充电响应慢、容易受负载波动影响，也不采用。
 
-第四，snapshot 对 UI 友好。UI 不应该知道 ADC 通道、分压比例、校准方法、充电 GPIO 有效电平，只应该读取 `battery_valid`、`battery_percent`、`charging` 这类模型字段。
+第四，snapshot 对 UI 友好。UI 不应该知道 ADC 通道、分压比例和校准方法，只应该读取 `battery_valid`、`battery_percent` 这类模型字段。`charge_valid/charging` 如果保留，也只作为未来硬件接入后的扩展，不参与当前右上角状态栏。
 
 第五，硬件缺失不应该拖垮主 App。即使 ADC 校准失败或 CHG GPIO 未接入，也应该让 UI、网络、AI 主链路继续运行，只是电池状态显示为 unknown。
 
@@ -522,7 +525,8 @@ esp_err_t power_service_set_event_callback(power_service_event_cb_t cb, void *us
 - 板卡通过 Type-C 输入并由 ETA6098 充电芯片给电池充电。
 - 板载 `CHG` LED 由 ETA6098 `STAT` 指示支路驱动；当前没有确认 `STAT` 再接到 ESP32 GPIO。
 - 草案默认 `SERVICE_POWER_CHG_GPIO = GPIO_NUM_NC`，因此 `charge_valid=false`、`charging=false`，UI 不显示 `LV_SYMBOL_CHARGE`。
-- v1 只计划覆盖状态栏电量和可选充电图标，不做完整 PMIC 管理。
+- v1 只计划覆盖状态栏电量变化，不做充电图标；用户根据 Type-C 口附近的 `CHG` LED 判断是否正在充电。
+- v1 不做完整 PMIC 管理。
 
 草案 snapshot：
 
@@ -586,10 +590,10 @@ typedef struct {
 
 ## UI 联动设计
 
-右上角状态栏建议最终保持三类图标：
+当前可落地的右上角状态栏建议保持两类图标：
 
 ```text
-Wi-Fi icon | charge icon | battery icon
+Wi-Fi icon | battery icon
 ```
 
 其中：
@@ -599,7 +603,8 @@ NetworkService:
   提供 Wi-Fi 状态。
 
 PowerService:
-  提供 battery_valid / battery_percent / charge_valid / charging。
+  提供 battery_valid / battery_percent。
+  charge_valid / charging 当前保持 false，不投影到 UI。
 
 AppModel:
   把这些 service snapshot 投影为状态栏模型。
@@ -619,15 +624,20 @@ UI:
 | `60-79%` | `LV_SYMBOL_BATTERY_3` |
 | `80-100%` | `LV_SYMBOL_BATTERY_FULL` |
 
-充电图标映射：
+当前不做充电图标映射：
 
-| 状态 | 图标 |
-| --- | --- |
-| `charge_valid=true && charging=true` | `LV_SYMBOL_CHARGE` |
-| `charging=false` | 空字符串 |
-| `charge_valid=false` | 空字符串 |
+```text
+charge_valid=false:
+  不显示 LV_SYMBOL_CHARGE。
 
-这样未充电时不会影响原有 Wi-Fi 和电池图标；正在充电时只额外显示 charge 图标。
+Type-C 充电状态:
+  用户根据板上 CHG LED 亮灭自行判断。
+
+未来如果 STAT 接入 ESP32 GPIO:
+  再把 charge_valid/charging 投影到 AppModel/UI。
+```
+
+这样 UI 不会假装知道固件无法读取的充电状态；右上角只表达设备能可靠观测到的事实：网络状态和电池电量估算。
 
 ## Type-C 充电与 CHG 指示灯
 
@@ -674,12 +684,13 @@ CHG LED 亮灭:
   由充电芯片自己控制，人眼可见。
 
 PowerService charging:
-  必须来自 ESP32 能读取到的 GPIO。
+  必须来自 ESP32 能读取到的 GPIO，当前不可用。
 
 当前板卡事实:
   现有资料只确认 CHG LED 和充电电路。
   尚未确认 ETA6098 STAT 接到 ESP32 GPIO。
   因此固件默认不知道 CHG LED 是否亮。
+  右上角 UI 不显示充电图标。
 ```
 
 如果未来要让 ESP32 读取充电状态，硬件上需要把 `STAT` 或等价状态节点接到一个 GPIO。这里要注意：
@@ -707,6 +718,7 @@ ADC 校准失败：
 
 CHG GPIO 未配置：
   charge_valid=false，不视为错误。
+  UI 不显示充电图标，用户看板载 CHG LED 判断充电。
 
 CHG GPIO 初始化失败：
   charge_valid=false，不影响电池采样。
@@ -718,7 +730,7 @@ CHG GPIO 初始化失败：
 
 - 本文是设计草案/待实现，不能在复习或面试中说“当前 PowerService 已经落地”。
 - 不要复用旧 ADC 文的结论替代项目事实；真正实现时要以当前板卡 demo、BSP 配置和实机测量为准。
-- `CHG/STAT` GPIO 未确认前，默认 `charge_valid=false`，不要假装能判断充电状态。
+- `CHG/STAT` GPIO 未确认前，默认 `charge_valid=false`，不要假装能判断充电状态，也不要在右上角显示充电图标。
 - `CHG` LED 亮灭不等于固件可读 charging；当前没有确认 `STAT` 接到 ESP32 GPIO。
 - Type-C 充电路径和 `CHG` LED 指示支路是两条不同路径，不要把 LED 支路理解成大电流充电路径。
 - 电池百分比线性映射只是状态栏粗略估算，不是精密电量计。
@@ -727,7 +739,7 @@ CHG GPIO 初始化失败：
 - PowerService 不应直接调用 UI，也不应决定低电量关机。
 - `get_snapshot()` 应读取缓存，不应在 UI 调用链里直接触发硬件采样。
 - `percent=0` 需要结合 `valid` 理解，不能单独代表低电。
-- `charging=false` 需要结合 `charge_valid` 理解，不能单独代表未充电。
+- 当前 UI 只显示电量变化；充电状态由用户观察 Type-C 口附近的 `CHG` LED。
 
 ## 面试问答
 
@@ -741,7 +753,7 @@ CHG GPIO 初始化失败：
 
 **问：为什么不通过电压上升判断是否正在充电？**
 
-答：电压趋势受负载、采样间隔、电池曲线影响，响应慢且容易误判。充电状态最好来自充电芯片的 `CHG/STAT` 引脚；如果没有硬件依据，就应该明确标记为 unknown，而不是猜。
+答：电压趋势受负载、采样间隔、电池曲线影响，响应慢且容易误判。当前没有 ESP32 可读的 `CHG/STAT` GPIO，所以固件侧应明确标记为 unknown，右上角不显示充电图标；用户直接看 Type-C 口附近的 `CHG` LED。
 
 **问：线性百分比有什么问题？**
 
@@ -761,11 +773,11 @@ CHG GPIO 初始化失败：
 
 **问：如果 CHG/STAT 没接到 ESP32，充电图标怎么办？**
 
-答：`charge_valid=false`，UI 不显示 charge 图标。不要通过电压上升去猜充电，否则负载变化和采样间隔很容易造成误判。
+答：不显示充电图标。`charge_valid=false`，右上角只显示 Wi-Fi 和电池电量。不要通过电压上升去猜充电，否则负载变化和采样间隔很容易造成误判；实际充电状态由用户看板载 `CHG` LED。
 
 **问：板上有 CHG 指示灯，为什么 ESP32 还不知道 charging？**
 
-答：因为 `CHG` LED 是 ETA6098 的 `STAT` 脚自己驱动的指示支路。它可以让人眼看到正在充电，但如果 `STAT` 没有额外接到 ESP32 GPIO，固件就读不到这个状态。PowerService 只能把 `charge_valid` 保持为 `false`。
+答：因为 `CHG` LED 是 ETA6098 的 `STAT` 脚自己驱动的指示支路。它可以让人眼看到正在充电，但如果 `STAT` 没有额外接到 ESP32 GPIO，固件就读不到这个状态。PowerService 只能把 `charge_valid` 保持为 `false`，UI 也不显示 charge 图标。
 
 **问：Type-C 充电路径和 CHG LED 支路有什么区别？**
 
@@ -777,10 +789,10 @@ CHG GPIO 初始化失败：
 - [ ] 能解释 ADC raw、校准 mV、分压换算、电池电压之间的关系。
 - [ ] 能写出 `power_read_adc_mv()`、`power_adc_mv_to_battery_mv()`、`power_battery_mv_to_percent()` 三个方法的伪代码。
 - [ ] 能写出 `3000mV-4120mV` 线性百分比的基本公式。
-- [ ] 能说明 `charge_valid=false` 的含义。
+- [ ] 能说明 `charge_valid=false` 的含义，以及为什么当前右上角不显示充电图标。
 - [ ] 能解释为什么不靠电压趋势推断充电。
 - [ ] 能解释 Type-C 充电路径和 CHG LED 指示支路的区别。
 - [ ] 能区分 PowerService 观测职责和 PowerPolicy 策略职责。
 - [ ] 能列出实现前必须确认的 `CHG/STAT` GPIO、有效电平和分压比例。
 - [ ] 能说明 `get_snapshot()` 为什么读取缓存而不是直接采样。
-- [ ] 能画出 `PowerService snapshot -> AppModel -> UI status bar` 数据流。
+- [ ] 能画出 `PowerService snapshot -> AppModel -> UI status bar -> battery icon` 数据流。

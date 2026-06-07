@@ -5,7 +5,7 @@ description: 说明 ESP32-S3-RLCD-4.2 示例板的 BAT_ADC 采样链路，作为
 
 这篇文章是 [PowerService：电源与电池状态](../projects/pixel-soul-services/power-service/) 的底层背景资料。它说明模拟电压如何进入 GPIO，如何变成 `raw`，为什么要做校准，以及怎样把这个采样链路用于电池电压观测。
 
-前半部分先讲 ESP32-S3 ADC 的通用原理；后半部分用 `ESP32-S3-RLCD-4.2` 示例板的电池采样链路说明 PowerService 为什么可以只暴露 `voltage_mv / percent / charging` 这类 snapshot 字段。
+前半部分先讲 ESP32-S3 ADC 的通用原理；后半部分用 `ESP32-S3-RLCD-4.2` 示例板的电池采样链路说明 PowerService 为什么可以只暴露 `voltage_mv / percent` 这类电量 snapshot 字段。当前板卡充电状态由 Type-C 口附近的 `CHG` LED 人眼判断，固件默认不读取 charging。
 
 ## 1. 为什么要学 ADC
 
@@ -401,8 +401,9 @@ typedef struct {
 ```text
 battery_valid
 battery_percent
-charging
 ```
+
+当前板卡没有确认 `CHG/STAT` 接到 ESP32 GPIO，所以右上角 UI 不显示充电图标。充电状态由用户观察 Type-C 口附近的 `CHG` LED 亮灭判断。
 
 ## 11. 校对记录
 
