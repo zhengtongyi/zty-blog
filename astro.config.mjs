@@ -45,6 +45,22 @@ export default defineConfig({
           ],
         },
         {
+          label: 'ESP32-S3-RLCD Demo',
+          items: [
+            { label: '学习路线', slug: 'projects/esp32-s3-rlcd-demos' },
+            { label: '01 Wi-Fi AP', slug: 'projects/esp32-s3-rlcd-demos/wifi-ap' },
+            { label: '02 Wi-Fi STA', slug: 'projects/esp32-s3-rlcd-demos/wifi-sta' },
+            { label: '03 ADC Battery', slug: 'projects/esp32-s3-rlcd-demos/adc-battery' },
+            { label: '04 I2C PCF85063', slug: 'projects/esp32-s3-rlcd-demos/i2c-pcf85063' },
+            { label: '05 I2C SHTC3', slug: 'projects/esp32-s3-rlcd-demos/i2c-shtc3' },
+            { label: '06 SD Card', slug: 'projects/esp32-s3-rlcd-demos/sd-card' },
+            { label: '07 Audio Test', slug: 'projects/esp32-s3-rlcd-demos/audio-test' },
+            { label: '08 LVGL v8', slug: 'projects/esp32-s3-rlcd-demos/lvgl-v8' },
+            { label: '09 LVGL v9', slug: 'projects/esp32-s3-rlcd-demos/lvgl-v9' },
+            { label: '10 Factory Program', slug: 'projects/esp32-s3-rlcd-demos/factory-program' },
+          ],
+        },
+        {
           label: 'Pixel Soul Service',
           items: [
             { label: '模块总览', slug: 'projects/pixel-soul-services' },

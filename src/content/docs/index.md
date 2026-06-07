@@ -9,6 +9,9 @@ hero:
     - text: 阅读 Service 模块笔记
       link: /projects/pixel-soul-services/
       icon: right-arrow
+    - text: 学习官方 Demo
+      link: /projects/esp32-s3-rlcd-demos/
+      icon: open-book
     - text: 查看全链路复盘
       link: /projects/pixel-soul-review/
       icon: open-book
@@ -19,6 +22,7 @@ hero:
 
 ## 最近更新
 
+- [ESP32-S3-RLCD 官方 Demo 学习路线](/projects/esp32-s3-rlcd-demos/)
 - [Pixel Soul Service 模块复习总览](/projects/pixel-soul-services/)
 - [Pixel Soul 全链路复盘总览](/projects/pixel-soul-review/)
 - [Session：AI 会话状态机](/projects/pixel-soul-services/session-service/)
