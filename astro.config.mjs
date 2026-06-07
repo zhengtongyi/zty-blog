@@ -31,13 +31,27 @@ export default defineConfig({
         {
           label: '技术笔记',
           items: [
-            { label: 'ESP32-S3 ADC 电池采集', slug: 'notes/esp32-s3-adc-battery' },
+            { label: 'ESP32-S3 电池采样背景', slug: 'notes/esp32-s3-adc-battery' },
           ],
         },
         {
           label: '项目',
           items: [
             { label: 'Pixel Soul', slug: 'projects/pixel-soul' },
+          ],
+        },
+        {
+          label: 'Pixel Soul Service',
+          items: [
+            { label: '模块总览', slug: 'projects/pixel-soul-services' },
+            { label: '基础状态服务', slug: 'projects/pixel-soul-services/foundation-services' },
+            { label: 'NetworkService', slug: 'projects/pixel-soul-services/network-service' },
+            { label: 'AudioService', slug: 'projects/pixel-soul-services/audio-service' },
+            { label: 'SRService', slug: 'projects/pixel-soul-services/sr-service' },
+            { label: 'Session', slug: 'projects/pixel-soul-services/session-service' },
+            { label: 'Protocol + WebSocketTask', slug: 'projects/pixel-soul-services/protocol-websocket' },
+            { label: 'TTSPlayer', slug: 'projects/pixel-soul-services/tts-player' },
+            { label: 'PowerService 草案', slug: 'projects/pixel-soul-services/power-service' },
           ],
         },
         {
@@ -50,4 +64,3 @@ export default defineConfig({
     }),
   ],
 });
-

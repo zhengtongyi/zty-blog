@@ -1,11 +1,11 @@
 ---
-title: ESP32-S3 ADC 学习笔记：以 ESP32-S3-RLCD-4.2 电池电压采集为例
-description: 从 ADC 基础、衰减、校准讲到 ESP32-S3-RLCD-4.2 示例板的 BAT_ADC 电池电压采集。
+title: ESP32-S3 电池电压采样原理与 PowerService 背景
+description: 说明 ESP32-S3-RLCD-4.2 示例板的 BAT_ADC 采样链路，作为 PowerService 电池状态设计的底层背景。
 ---
 
-这篇笔记的目标不是背公式，而是把 ADC 的工程使用流程讲清楚：模拟电压如何进入 GPIO，如何变成 `raw`，为什么要做校准，以及怎样把它用于一个真实的电池电压采集示例。
+这篇文章是 [PowerService：电源与电池状态](../projects/pixel-soul-services/power-service/) 的底层背景资料。它说明模拟电压如何进入 GPIO，如何变成 `raw`，为什么要做校准，以及怎样把这个采样链路用于电池电压观测。
 
-前半部分适合学习 ESP32-S3 ADC 的通用思路；后半部分用 `ESP32-S3-RLCD-4.2` 示例板的电池采样链路做一个完整例子。
+前半部分先讲 ESP32-S3 ADC 的通用原理；后半部分用 `ESP32-S3-RLCD-4.2` 示例板的电池采样链路说明 PowerService 为什么可以只暴露 `voltage_mv / percent / charging` 这类 snapshot 字段。
 
 ## 1. 为什么要学 ADC
 
