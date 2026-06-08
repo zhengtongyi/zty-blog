@@ -1,0 +1,143 @@
+<script is:inline>
+  (() => {
+    const contentSelector = '.sl-markdown-content';
+    const dialogId = 'zty-media-lightbox';
+    const openClass = 'zty-media-lightbox-open';
+
+    function findImage(target) {
+      const image = target.closest(`${contentSelector} img`);
+      if (!image || image.closest('a')) return null;
+      return image;
+    }
+
+    function findMermaid(target) {
+      return (
+        target.closest(`${contentSelector} .mermaid`) ||
+        target.closest(`${contentSelector} svg[id^="mermaid-"]`)
+      );
+    }
+
+    function ensureDialog() {
+      let dialog = document.getElementById(dialogId);
+      if (dialog) return dialog;
+
+      dialog = document.createElement('dialog');
+      dialog.id = dialogId;
+      dialog.className = 'zty-media-lightbox';
+      dialog.setAttribute('aria-label', 'View enlarged media');
+      dialog.innerHTML = `
+        <div class="zty-media-lightbox__panel">
+          <button type="button" class="zty-media-lightbox__close" data-lightbox-close aria-label="Close enlarged media">Close</button>
+          <div class="zty-media-lightbox__content" data-lightbox-content></div>
+          <p class="zty-media-lightbox__caption" data-lightbox-caption hidden></p>
+        </div>
+      `;
+
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) {
+          closeDialog(dialog);
+        }
+      });
+
+      dialog.querySelector('[data-lightbox-close]')?.addEventListener('click', () => {
+        closeDialog(dialog);
+      });
+
+      dialog.addEventListener('close', () => {
+        document.body.classList.remove(openClass);
+        dialog.querySelector('[data-lightbox-content]')?.replaceChildren();
+      });
+
+      document.body.appendChild(dialog);
+      return dialog;
+    }
+
+    function setCaption(dialog, text) {
+      const caption = dialog.querySelector('[data-lightbox-caption]');
+      if (!caption) return;
+
+      if (text) {
+        caption.textContent = text;
+        caption.hidden = false;
+      } else {
+        caption.textContent = '';
+        caption.hidden = true;
+      }
+    }
+
+    function showDialog(dialog) {
+      document.body.classList.add(openClass);
+      if (!dialog.open && typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute('open', '');
+      }
+    }
+
+    function closeDialog(dialog) {
+      if (dialog.open && typeof dialog.close === 'function') {
+        dialog.close();
+      } else {
+        dialog.removeAttribute('open');
+        document.body.classList.remove(openClass);
+        dialog.querySelector('[data-lightbox-content]')?.replaceChildren();
+      }
+    }
+
+    function openImage(image) {
+      const dialog = ensureDialog();
+      const content = dialog.querySelector('[data-lightbox-content]');
+      if (!content) return;
+
+      const clone = document.createElement('img');
+      clone.className = 'zty-media-lightbox__image';
+      clone.src = image.currentSrc || image.src;
+      clone.alt = image.alt || '';
+      clone.decoding = 'async';
+
+      content.replaceChildren(clone);
+      setCaption(dialog, image.alt || '');
+      showDialog(dialog);
+    }
+
+    function openMermaid(diagram) {
+      const dialog = ensureDialog();
+      const content = dialog.querySelector('[data-lightbox-content]');
+      if (!content) return;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'zty-media-lightbox__diagram';
+
+      const renderedSvg = diagram.matches('svg') ? diagram : diagram.querySelector('svg');
+      if (renderedSvg) {
+        wrapper.appendChild(renderedSvg.cloneNode(true));
+      } else {
+        const fallback = document.createElement('pre');
+        fallback.className = 'zty-media-lightbox__fallback';
+        fallback.textContent = diagram.textContent.trim();
+        wrapper.appendChild(fallback);
+      }
+
+      content.replaceChildren(wrapper);
+      setCaption(dialog, 'Diagram');
+      showDialog(dialog);
+    }
+
+    document.addEventListener('click', (event) => {
+      if (event.defaultPrevented || !(event.target instanceof Element)) return;
+
+      const image = findImage(event.target);
+      if (image) {
+        event.preventDefault();
+        openImage(image);
+        return;
+      }
+
+      const mermaid = findMermaid(event.target);
+      if (mermaid) {
+        event.preventDefault();
+        openMermaid(mermaid);
+      }
+    });
+  })();
+</script>

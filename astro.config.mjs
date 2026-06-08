@@ -14,6 +14,7 @@ export default defineConfig({
       description: '嵌入式、AIoT 与 AI Agent 的学习笔记。',
       customCss: ['./src/styles/custom.css'],
       components: {
+        Head: './src/components/Head.astro',
         ThemeProvider: './src/components/ThemeProvider.astro',
         ThemeSelect: './src/components/ThemeToggle.astro',
       },
