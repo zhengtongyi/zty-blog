@@ -85,6 +85,12 @@ export default defineConfig({
           ],
         },
         {
+          label: '面试准备',
+          items: [
+            { label: '仿生知觉专项准备', slug: 'interviews/bionic-perception' },
+          ],
+        },
+        {
           label: '部署',
           items: [
             { label: 'Cloudflare Pages', slug: 'deploy/cloudflare-pages' },

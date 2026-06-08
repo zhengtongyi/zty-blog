@@ -15,6 +15,9 @@ hero:
     - text: 查看全链路复盘
       link: /projects/pixel-soul-review/
       icon: open-book
+    - text: 面试专项准备
+      link: /interviews/bionic-perception/
+      icon: open-book
     - text: 查看 Pixel Soul
       link: /projects/pixel-soul/
       icon: open-book
@@ -25,6 +28,7 @@ hero:
 - [ESP32-S3-RLCD 官方 Demo 学习路线](/projects/esp32-s3-rlcd-demos/)
 - [Pixel Soul Service 模块复习总览](/projects/pixel-soul-services/)
 - [Pixel Soul 全链路复盘总览](/projects/pixel-soul-review/)
+- [仿生知觉专项面试准备](/interviews/bionic-perception/)
 - [Session：AI 会话状态机](/projects/pixel-soul-services/session-service/)
 - [ESP32-S3 电池电压采样原理与 PowerService 背景](/notes/esp32-s3-adc-battery/)
 - [Pixel Soul 项目记录](/projects/pixel-soul/)
