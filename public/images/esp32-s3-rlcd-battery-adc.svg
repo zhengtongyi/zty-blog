@@ -1,67 +1,85 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="440" viewBox="0 0 980 440" role="img" aria-labelledby="title desc">
-  <title id="title">ESP32-S3-RLCD-4.2 battery ADC divider</title>
-  <desc id="desc">Equivalent circuit: VBAT is divided by 200 kOhm and 100 kOhm resistors, then sampled by ESP32-S3 GPIO4 ADC1 channel 3.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="720" viewBox="0 0 980 720" role="img" aria-labelledby="title desc">
+  <title id="title">ESP32-S3-RLCD battery ADC voltage divider</title>
+  <desc id="desc">Textbook-style local circuit: VBAT is divided by R up and R down. The middle node BAT_ADC is sampled by ESP32-S3 GPIO4 ADC1 channel 3.</desc>
   <defs>
     <style>
       .bg { fill: #f8fafc; }
       .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
-      .line { stroke: #0f172a; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .wire { stroke: #0f172a; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
       .thin { stroke: #64748b; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
       .node { fill: #0f8f78; stroke: #0f172a; stroke-width: 2; }
-      .label { fill: #0f172a; font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 22px; font-weight: 700; }
+      .box { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .note { fill: #fefce8; stroke: #ca8a04; stroke-width: 2; }
+      .label { fill: #0f172a; font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 23px; font-weight: 700; }
       .text { fill: #334155; font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 18px; }
+      .small { fill: #475569; font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 15px; }
       .mono { fill: #0f172a; font-family: "Cascadia Mono", Consolas, monospace; font-size: 17px; }
-      .chip { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
-      .hint { fill: #475569; font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 15px; }
+      .mono-strong { fill: #0f172a; font-family: "Cascadia Mono", Consolas, monospace; font-size: 18px; font-weight: 700; }
     </style>
   </defs>
 
-  <rect class="bg" x="0" y="0" width="980" height="440" rx="20" />
-  <rect class="panel" x="30" y="30" width="920" height="385" rx="16" />
+  <rect class="bg" x="0" y="0" width="980" height="720" rx="22" />
+  <rect class="panel" x="30" y="30" width="920" height="660" rx="18" />
 
-  <text class="label" x="62" y="70">Battery voltage sampling path</text>
-  <text class="text" x="62" y="100">ESP32-S3-RLCD-4.2 equivalent circuit for learning</text>
+  <text class="label" x="64" y="76">Battery ADC voltage divider</text>
+  <text class="text" x="64" y="108">Local equivalent circuit for ESP32-S3-RLCD battery voltage sampling</text>
 
-  <text class="label" x="110" y="145">VBAT</text>
-  <text class="text" x="88" y="171">Li-ion cell</text>
-  <line class="line" x1="160" y1="185" x2="160" y2="215" />
-  <line class="line" x1="125" y1="185" x2="195" y2="185" />
-  <line class="line" x1="138" y1="215" x2="182" y2="215" />
-  <line class="line" x1="160" y1="215" x2="160" y2="245" />
+  <!-- Divider trunk -->
+  <line class="wire" x1="260" y1="170" x2="260" y2="186" />
+  <text class="label" x="215" y="142">B+ / VBAT</text>
+  <text class="small" x="304" y="170">Li-ion battery voltage</text>
 
-  <line class="line" x1="160" y1="245" x2="320" y2="245" />
-  <polyline class="line" points="320,245 335,225 365,265 395,225 425,265 455,225 485,265 500,245" />
-  <text class="label" x="365" y="205">R1</text>
-  <text class="text" x="348" y="292">200 kOhm</text>
+  <!-- R_up vertical resistor -->
+  <polyline class="wire" points="260,186 240,202 280,218 240,234 280,250 240,266 280,282 260,298" />
+  <text class="label" x="92" y="230">R_up</text>
+  <text class="text" x="92" y="258">200K</text>
+  <text class="small" x="92" y="282">upper divider resistor</text>
 
-  <line class="line" x1="500" y1="245" x2="585" y2="245" />
-  <circle class="node" cx="585" cy="245" r="8" />
-  <text class="label" x="535" y="222">BAT_ADC</text>
-  <text class="mono" x="526" y="292">Vadc = Vbat / 3</text>
+  <line class="wire" x1="260" y1="298" x2="260" y2="340" />
+  <circle class="node" cx="260" cy="340" r="9" />
+  <text class="label" x="92" y="342">BAT_ADC node</text>
+  <text class="mono" x="92" y="370">Vadc = Vbat / 3</text>
 
-  <line class="line" x1="585" y1="245" x2="585" y2="300" />
-  <polyline class="line" points="585,300 565,315 605,335 565,355 605,375 585,390" />
-  <text class="label" x="610" y="330">R2</text>
-  <text class="text" x="610" y="355">100 kOhm</text>
-  <line class="line" x1="545" y1="390" x2="625" y2="390" />
-  <line class="line" x1="558" y1="405" x2="612" y2="405" />
-  <line class="line" x1="572" y1="420" x2="598" y2="420" />
+  <!-- Branch to ESP32 ADC -->
+  <line class="wire" x1="260" y1="340" x2="520" y2="340" />
+  <rect class="box" x="520" y="238" width="355" height="204" rx="16" />
+  <text class="label" x="552" y="286">ESP32-S3 ADC input</text>
+  <text class="mono" x="552" y="326">GPIO4 / ADC1_CH3</text>
+  <text class="mono" x="552" y="358">ADC_ATTEN_DB_12</text>
+  <text class="mono" x="552" y="390">adc_oneshot_read()</text>
+  <text class="mono" x="552" y="422">adc_cali_raw_to_voltage()</text>
 
-  <line class="line" x1="585" y1="245" x2="690" y2="245" />
-  <rect class="chip" x="690" y="155" width="245" height="150" rx="14" />
-  <text class="label" x="722" y="200">ESP32-S3</text>
-  <text class="mono" x="722" y="232">GPIO4</text>
-  <text class="mono" x="722" y="258">ADC1 Channel 3</text>
-  <text class="mono" x="722" y="284">ADC_ATTEN_DB_12</text>
+  <!-- R_down vertical resistor -->
+  <line class="wire" x1="260" y1="340" x2="260" y2="398" />
+  <polyline class="wire" points="260,398 240,414 280,430 240,446 280,462 240,478 280,494 260,510" />
+  <text class="label" x="92" y="438">R_down</text>
+  <text class="text" x="92" y="466">100K</text>
+  <text class="small" x="92" y="490">lower divider resistor</text>
 
-  <line class="thin" x1="640" y1="245" x2="640" y2="312" />
-  <line class="thin" x1="622" y1="312" x2="678" y2="312" />
-  <line class="thin" x1="622" y1="326" x2="678" y2="326" />
-  <line class="thin" x1="640" y1="326" x2="640" y2="358" />
-  <line class="thin" x1="620" y1="358" x2="680" y2="358" />
-  <line class="thin" x1="633" y1="372" x2="667" y2="372" />
-  <line class="thin" x1="643" y1="386" x2="657" y2="386" />
-  <text class="hint" x="658" y="332">optional filter cap</text>
+  <!-- Ground -->
+  <line class="wire" x1="260" y1="510" x2="260" y2="552" />
+  <line class="wire" x1="220" y1="552" x2="300" y2="552" />
+  <line class="wire" x1="234" y1="570" x2="286" y2="570" />
+  <line class="wire" x1="248" y1="588" x2="272" y2="588" />
+  <text class="label" x="318" y="560">GND</text>
 
-  <text class="mono" x="62" y="350">battery_mv = adc_mv * (200k + 100k) / 100k = adc_mv * 3</text>
+  <!-- Optional filter capacitor -->
+  <line class="thin" x1="350" y1="340" x2="350" y2="460" />
+  <line class="thin" x1="326" y1="460" x2="374" y2="460" />
+  <line class="thin" x1="326" y1="478" x2="374" y2="478" />
+  <line class="thin" x1="350" y1="478" x2="350" y2="552" />
+  <line class="thin" x1="330" y1="552" x2="370" y2="552" />
+  <line class="thin" x1="338" y1="566" x2="362" y2="566" />
+  <line class="thin" x1="346" y1="580" x2="354" y2="580" />
+  <text class="small" x="382" y="468">optional filter capacitor</text>
+
+  <!-- Formula panel -->
+  <rect class="note" x="64" y="610" width="866" height="70" rx="12" />
+  <text class="mono-strong" x="88" y="640">adc_mv = battery_mv * R_down / (R_up + R_down)</text>
+  <text class="mono-strong" x="88" y="664">battery_mv = adc_mv * (R_up + R_down) / R_down = adc_mv * 3.0</text>
+
+  <!-- Example annotation -->
+  <text class="mono" x="540" y="526">Example:</text>
+  <text class="mono" x="540" y="556">4.12V battery -> 1.37V at BAT_ADC</text>
+  <text class="mono" x="540" y="586">1.37V is measured with ADC_ATTEN_DB_12</text>
 </svg>

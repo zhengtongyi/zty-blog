@@ -71,7 +71,7 @@ export default defineConfig({
             { label: 'Session', slug: 'projects/pixel-soul-services/session-service' },
             { label: 'Protocol + WebSocketTask', slug: 'projects/pixel-soul-services/protocol-websocket' },
             { label: 'TTSPlayer', slug: 'projects/pixel-soul-services/tts-player' },
-            { label: 'PowerService 草案', slug: 'projects/pixel-soul-services/power-service' },
+            { label: 'PowerService', slug: 'projects/pixel-soul-services/power-service' },
           ],
         },
         {

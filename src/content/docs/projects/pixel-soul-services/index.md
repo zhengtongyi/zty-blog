@@ -30,7 +30,7 @@ Application
 5. [Protocol + WebSocketTask](./protocol-websocket/)：理解 JSON 控制帧和 binary PCM 传输。
 6. [TTSPlayer](./tts-player/)：理解下行 PCM 播放和本地停播。
 7. [Session](./session-service/)：理解 AI Session owner 和 turn 状态机。
-8. [PowerService](./power-service/)：理解电池状态服务设计草案。
+8. [PowerService](./power-service/)：理解电池状态服务 v1 实现。
 
 ## 核心心智模型
 
@@ -85,7 +85,7 @@ flowchart TD
 | Session | `Session` |
 | Protocol + WebSocketTask | `Protocol`、`WebSocketTask` |
 | TTSPlayer | `TTSPlayer` |
-| PowerService | `PowerService` 设计草案 |
+| PowerService | `PowerService` |
 
 ## 复习检查表
 
