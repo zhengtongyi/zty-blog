@@ -36,8 +36,9 @@ flowchart LR
 ## 阅读顺序
 
 1. [设备侧复盘](./device-side/)：先理解设备如何组织 UI、按键、SR、Session 和播放。
-2. [云端复盘](./cloud-side/)：再理解云端如何接收设备音频、调用 ASR/Agent/TTS 并管理 turn。
-3. [Pi Agent Gateway 复盘](./pi-agent-gateway/)：最后理解 Agent provider 如何独立成 OpenAI 兼容服务。
+2. [App 层复习](./app-layer/)：单独理解 AppEvent 串行分发、按键业务、Footer 和 ViewModel 数据流。
+3. [云端复盘](./cloud-side/)：再理解云端如何接收设备音频、调用 ASR/Agent/TTS 并管理 turn。
+4. [Pi Agent Gateway 复盘](./pi-agent-gateway/)：最后理解 Agent provider 如何独立成 OpenAI 兼容服务。
 
 ## 面试表达主线
 
