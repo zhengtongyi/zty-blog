@@ -11,13 +11,25 @@ description: 从 Service 层边界、模块职责和面试表达角度梳理 Pix
 
 Service 层维护内部状态和任务，但不直接渲染 UI，不决定页面切换，也不写产品文案。
 
+分层边界可以一句话记：
+
+> App 管产品业务和 UI 编排；Service 管设备能力和状态模型；BSP 管当前板子的引脚、总线和硬件事实；ESP-IDF/第三方 driver 管具体外设操作。
+
+当前仓库没有独立完整的 `Driver` 目录层。`Driver/HAL` 更适合理解为一个概念 seam：简单外设直接由 Service 调用 ESP-IDF 或第三方 driver；共享总线、板级引脚和硬件差异由 BSP 收口。
+
 ```text
 Application
   -> Service
-  -> Driver / HAL
-  -> BSP
-  -> ESP-IDF / Hardware
+      -> BSP
+      -> ESP-IDF / third-party driver
+  -> Display
+
+BSP
+  -> ESP-IDF driver
+  -> Hardware
 ```
+
+只有当某个芯片协议复杂、被多个 Service 复用、需要替换不同硬件实现，或者 Service 内部开始堆寄存器/总线细节时，才值得再抽出独立 Driver adapter。当前不强行补 Driver 层，否则会增加一层浅模块。
 
 ## 阅读顺序
 
@@ -89,7 +101,7 @@ flowchart TD
 
 ## 复习检查表
 
-- 能否一句话说清 App / Service / Driver / BSP 的边界？
+- 能否一句话说清 App / Service / Driver / BSP 的边界，并说明当前 Driver 不是独立完整目录层？
 - 能否说明为什么 UI 读 snapshot，而不是直接读硬件？
 - 能否说明为什么 `Session` 是 AI 会话 owner？
 - 能否画出上行 PCM 和下行 PCM 的路径？
