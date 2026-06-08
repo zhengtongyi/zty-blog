@@ -33,6 +33,8 @@ Session: business owner
 
 ## 主流程
 
+如果想从端云交互场景理解协议，可以先读全链路复盘里的 [协议交互泳道图](../pixel-soul-review/protocol-flows/)；本篇更关注设备侧 `Protocol` 和 `WebSocketTask` 的模块边界。
+
 ```text
 Session
   -> protocol_build_session_start()

@@ -37,8 +37,9 @@ flowchart LR
 
 1. [设备侧复盘](./device-side/)：先理解设备如何组织 UI、按键、SR、Session 和播放。
 2. [App 层复习](./app-layer/)：单独理解 AppEvent 串行分发、按键业务、Footer 和 ViewModel 数据流。
-3. [云端复盘](./cloud-side/)：再理解云端如何接收设备音频、调用 ASR/Agent/TTS 并管理 turn。
-4. [Pi Agent Gateway 复盘](./pi-agent-gateway/)：最后理解 Agent provider 如何独立成 OpenAI 兼容服务。
+3. [协议交互泳道图](./protocol-flows/)：用建连、唤醒、多轮、打断和超时场景理解设备与云端怎么通信。
+4. [云端复盘](./cloud-side/)：再理解云端如何接收设备音频、调用 ASR/Agent/TTS 并管理 turn。
+5. [Pi Agent Gateway 复盘](./pi-agent-gateway/)：最后理解 Agent provider 如何独立成 OpenAI 兼容服务。
 
 ## 面试表达主线
 
@@ -59,6 +60,7 @@ flowchart LR
 
 - 能否画出设备到云端再到 Agent 的调用链？
 - 能否解释 `ai-session-ws/1` 为什么同时有 JSON 和 binary PCM？
+- 能否用泳道图讲清 `session_start -> wake_start -> turn_new -> output_text -> turn_done`？
 - 能否说明设备侧 `Session` 和云端 `DeviceSession` 的职责差异？
 - 能否解释 `turn_terminate` 如何让 KEY 打断从本地 UX 扩展到云端取消？
 - 能否说明 Pi Agent Gateway 和 Cloud New 的边界？

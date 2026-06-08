@@ -80,6 +80,7 @@ export default defineConfig({
             { label: '复盘总览', slug: 'projects/pixel-soul-review' },
             { label: '设备侧', slug: 'projects/pixel-soul-review/device-side' },
             { label: 'App 层', slug: 'projects/pixel-soul-review/app-layer' },
+            { label: '协议交互泳道图', slug: 'projects/pixel-soul-review/protocol-flows' },
             { label: '云端 Cloud New', slug: 'projects/pixel-soul-review/cloud-side' },
             { label: 'Pi Agent Gateway', slug: 'projects/pixel-soul-review/pi-agent-gateway' },
           ],
