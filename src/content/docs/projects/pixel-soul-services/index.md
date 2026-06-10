@@ -7,15 +7,13 @@ description: 从 Service 层边界、模块职责和面试表达角度梳理 Pix
 
 ## 总体定位
 
-`components/service` 是设备基础能力集合。它把网络、按键、音频、语音识别、会话协议、播放、传感器、时间、SD、电源等能力封装为 App 可组合的 Service。
+`components/service` 是设备基础能力集合。它把网络、按键、音频、语音识别、会话协议、播放、传感器、时间、SD、电源等能力封装成 App 可组合的 Service。
 
 Service 层维护内部状态和任务，但不直接渲染 UI，不决定页面切换，也不写产品文案。
 
-分层边界可以一句话记：
+分层边界可以这样理解：
 
-> App 管产品业务和 UI 编排；Service 管设备能力和状态模型；BSP 管当前板子的引脚、总线和硬件事实；ESP-IDF/第三方 driver 管具体外设操作。
-
-当前仓库没有独立完整的 `Driver` 目录层。`Driver/HAL` 更适合理解为一个概念 seam：简单外设直接由 Service 调用 ESP-IDF 或第三方 driver；共享总线、板级引脚和硬件差异由 BSP 收口。
+> App 管产品业务和 UI 编排；Service 管设备能力和状态模型；BSP 管当前板子的引脚、总线和硬件事实；ESP-IDF / 第三方 driver 管具体外设操作。
 
 ```text
 Application
@@ -29,7 +27,7 @@ BSP
   -> Hardware
 ```
 
-只有当某个芯片协议复杂、被多个 Service 复用、需要替换不同硬件实现，或者 Service 内部开始堆寄存器/总线细节时，才值得再抽出独立 Driver adapter。当前不强行补 Driver 层，否则会增加一层浅模块。
+只有当某个芯片协议复杂、被多个 Service 复用、需要替换不同硬件实现，或者 Service 内部开始堆寄存器/总线细节时，才值得再抽出独立 Driver adapter。当前不强行补完整 Driver 层，否则会增加一层浅模块。
 
 ## 阅读顺序
 
@@ -43,6 +41,8 @@ BSP
 6. [TTSPlayer](./tts-player/)：理解下行 PCM 播放和本地停播。
 7. [Session](./session-service/)：理解 AI Session owner 和 turn 状态机。
 8. [PowerService](./power-service/)：理解电池状态服务 v1 实现。
+
+如果要进一步理解网络音频链路的专业化深化，可以继续读独立专栏：[音频流可靠传输](../../audio-stream-reliability/)。
 
 ## 核心心智模型
 
@@ -89,7 +89,7 @@ flowchart TD
 ## 模块覆盖
 
 | 笔记 | 覆盖模块 |
-| --- | --- |
+|---|---|
 | 基础状态服务 | `ButtonService`、`SensorService`、`TimeService`、`SdService` |
 | NetworkService | `NetworkService`、`network_storage`、`network_portal`、`network_dns` |
 | AudioService | `AudioService`、`sr_ringbuf` |
@@ -101,9 +101,10 @@ flowchart TD
 
 ## 复习检查表
 
-- 能否一句话说清 App / Service / Driver / BSP 的边界，并说明当前 Driver 不是独立完整目录层？
-- 能否说明为什么 UI 读 snapshot，而不是直接读硬件？
-- 能否说明为什么 `Session` 是 AI 会话 owner？
-- 能否画出上行 PCM 和下行 PCM 的路径？
-- 能否解释 `turn_new` 为什么是强边界？
-- 能否解释 KEY 打断为什么先本地停播，再发 `turn_terminate`？
+- [ ] 能否一句话说清 App / Service / Driver / BSP 的边界，并说明当前 Driver 不是独立完整目录层？
+- [ ] 能否说明为什么 UI 读 snapshot，而不是直接读硬件？
+- [ ] 能否说明为什么 `Session` 是 AI 会话 owner？
+- [ ] 能否画出上行 PCM 和下行 PCM 的路径？
+- [ ] 能否解释 `turn_new` 为什么是强边界？
+- [ ] 能否解释 KEY 打断为什么先本地停播，再发 `turn_terminate`？
+- [ ] 能否把音频流可靠传输作为独立工程问题，而不是普通 WebSocket 发送问题？

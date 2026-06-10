@@ -40,6 +40,13 @@ export default defineConfig({
           ],
         },
         {
+          label: '音频流可靠传输',
+          items: [
+            { label: '专栏总览', slug: 'audio-stream-reliability' },
+            { label: '01 问题背景与任务调研', slug: 'audio-stream-reliability/01-problem-background' },
+          ],
+        },
+        {
           label: '项目',
           items: [
             { label: 'Pixel Soul', slug: 'projects/pixel-soul' },
