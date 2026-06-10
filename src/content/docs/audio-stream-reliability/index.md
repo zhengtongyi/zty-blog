@@ -22,7 +22,7 @@ description: 记录 ESP32-S3 实时语音终端中音频流可靠传输模块的
 | 章节 | 内容 |
 |---|---|
 | [01 问题背景与任务调研](./01-problem-background/) | 说明为什么要把音频流可靠传输作为独立模块，梳理问题、指标和方案取舍。 |
-| 02 当前架构与模块边界 | 复盘 `SRService -> Session -> WebSocketTask -> TTSPlayer` 的现状和职责。 |
+| [02 Xiaozhi 音频流传输源码研究](./02-xiaozhi-audio-transport-study/) | 对照 `xiaozhi-esp32-main`，研究 WebSocket、MQTT+UDP、Opus 队列和协议抽象。 |
 | 03 指标体系与基线数据 | 建立首帧延迟、吞吐、backlog、drop、重连和长稳指标。 |
 | 04 异常场景与弱网测试 | 覆盖慢云端、断线、迟到 turn、播放打断和连续多轮。 |
 | 05 优化过程记录 | 记录真实优化动作、取舍、失败尝试和结果变化。 |
