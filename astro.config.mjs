@@ -40,10 +40,10 @@ export default defineConfig({
           ],
         },
         {
-          label: '音频流可靠传输',
+          label: '音频流链路搭建与可靠性优化',
           items: [
             { label: '专栏总览', slug: 'audio-stream-reliability' },
-            { label: '01 问题背景与任务调研', slug: 'audio-stream-reliability/01-problem-background' },
+            { label: '01 问题背景与常见问题', slug: 'audio-stream-reliability/01-problem-background' },
             { label: '02 Xiaozhi 音频流传输源码研究', slug: 'audio-stream-reliability/02-xiaozhi-audio-transport-study' },
           ],
         },

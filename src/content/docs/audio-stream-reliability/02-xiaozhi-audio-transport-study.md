@@ -1,6 +1,6 @@
 ---
 title: 02 Xiaozhi 音频流传输源码研究
-description: 对照 xiaozhi-esp32-main 源码，分析它的 WebSocket、MQTT+UDP、Opus 队列和协议抽象，为后续音频流可靠传输模块设计提供参考。
+description: 对照 xiaozhi-esp32-main 源码，分析它的 WebSocket、MQTT+UDP、Opus 队列和协议抽象，为后续音频流链路搭建与可靠性优化提供参考。
 ---
 
 ## 一句话结论
@@ -99,7 +99,7 @@ payload
 
 这说明它不是让上层到处处理 socket、UDP、JSON、Opus 细节，而是先定义一个稳定的数据单元和操作集合。`WebsocketProtocol` 和 `MqttProtocol` 都是这个 seam 后面的 Adapter。
 
-这个设计对 Pixel Soul 的启发很直接：如果后续要做“音频流可靠传输模块”，就不应该让 `Session`、`SRService`、`TTSPlayer` 都直接理解 WebSocket 细节。应该先抽出一个小 interface，让业务只关心：
+这个设计对 Pixel Soul 的启发很直接：如果后续要做“音频流链路搭建与可靠性优化”，就不应该让 `Session`、`SRService`、`TTSPlayer` 都直接理解 WebSocket 细节。应该先抽出一个小 interface，让业务只关心：
 
 - 音频通道是否打开。
 - 现在能不能发送上行音频。
@@ -321,7 +321,7 @@ incoming packet -> protocol callback -> decode queue -> speaker
 - 队列水位和时延统计还不够系统化。
 - 业务状态、音频状态和传输状态仍然需要结合 `Application` 一起理解。
 
-所以它是一个很好的参考对象，但不是“音频流可靠传输”的最终答案。
+所以它是一个很好的参考对象，但不是“音频流链路可靠性”的最终答案。
 
 ## 对后续专栏的启发
 
@@ -384,4 +384,4 @@ incoming packet -> protocol callback -> decode queue -> speaker
 - 完整 Opus 化。
 - 复杂媒体栈。
 
-当前更稳的目标是：先把 Pixel Soul 的 WebSocket 音频流做成一个可观察、可测试、可解释的可靠传输模块。这样后续无论是否迁移到 Opus 或 UDP，都会有清晰依据，而不是凭感觉重构。
+当前更稳的目标是：先把 Pixel Soul 的 WebSocket 音频流做成一个可观察、可测试、可解释的链路模块。这样后续无论是否迁移到 Opus 或 UDP，都会有清晰依据，而不是凭感觉重构。
