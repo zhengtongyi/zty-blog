@@ -45,6 +45,7 @@ export default defineConfig({
             { label: '专栏总览', slug: 'audio-stream-reliability' },
             { label: '01 问题背景与常见问题', slug: 'audio-stream-reliability/01-problem-background' },
             { label: '02 Xiaozhi 音频流传输源码研究', slug: 'audio-stream-reliability/02-xiaozhi-audio-transport-study' },
+            { label: '03 上行 PCM 发包链路', slug: 'audio-stream-reliability/03-uplink-pcm-backpressure-baseline' },
           ],
         },
         {

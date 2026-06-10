@@ -25,7 +25,7 @@ description: 记录 ESP32-S3 实时语音终端中音频流链路搭建、常见
 |---|---|
 | [01 问题背景与常见问题](./01-problem-background/) | 说明为什么要把音频流链路作为独立问题，梳理常见风险、指标和方案取舍。 |
 | [02 Xiaozhi 音频流传输源码研究](./02-xiaozhi-audio-transport-study/) | 对照 `xiaozhi-esp32-main`，研究 WebSocket、MQTT+UDP、Opus 队列和协议抽象。 |
-| 03 指标体系与基线数据 | 建立首帧延迟、吞吐、backlog、drop、重连和长稳指标。 |
+| [03 上行 PCM 发包链路：积压、回压与弱网基线](./03-uplink-pcm-backpressure-baseline/) | 研究上行 PCM 从采集到 WebSocket 发包之间的积压问题，明确瓶颈、指标和基线。 |
 | 04 异常场景与弱网测试 | 覆盖慢云端、断线、迟到 turn、播放打断和连续多轮。 |
 | 05 优化过程记录 | 记录真实优化动作、取舍、失败尝试和结果变化。 |
 | 06 验证总结与面试表达 | 汇总证据、复盘价值，并沉淀成简历和面试叙事。 |
