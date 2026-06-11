@@ -49,6 +49,7 @@ export default defineConfig({
             { label: '04 Cloudflare 公网链路基线', slug: 'audio-stream-reliability/04-cloudflare-public-link-baseline' },
             { label: '05 四象限对照基线分析', slug: 'audio-stream-reliability/05-four-quadrant-baseline-analysis' },
             { label: '06 Frame 聚合单变量实验', slug: 'audio-stream-reliability/06-frame-aggregation-analysis' },
+            { label: '07 Transport 写入分层', slug: 'audio-stream-reliability/07-transport-write-breakdown' },
           ],
         },
         {
