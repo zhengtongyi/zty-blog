@@ -323,6 +323,145 @@ poll 阻塞可以明显下降；
 3. **不是服务端业务处理慢**。因为服务端只是 metrics-only 接收+回执。
 4. **最贴近的解释仍然是：TCP/socket/Cloudflare 路径的持续可写能力小于 PCM 生产速率。**
 
+## 当前网络链路传输模型
+
+为了避免把现象误解成“WebSocket 调用本身固定慢”，这里先把当前模型写清楚。
+
+本项目的发送链路可以抽象成：
+
+```text
+SRService
+  -> audio tx ringbuf
+  -> WebSocketTask
+  -> esp_transport_write()
+  -> ESP-IDF WebSocket transport
+  -> TLS/TCP/lwIP
+  -> Wi-Fi
+  -> 公网
+  -> Cloudflare Edge
+  -> Cloudflare Tunnel / origin
+  -> metrics-only server
+```
+
+其中 `esp_transport_write()` 背后大致不是一次简单的 `send()`，而是：
+
+```text
+WebSocket write
+  -> poll parent transport 是否可写
+  -> 构造并 mask WebSocket frame
+  -> write WebSocket header
+  -> write WebSocket payload
+  -> parent transport 继续进入 TLS/TCP write
+  -> lwIP 尝试把数据放入 TCP send buffer / send queue
+```
+
+因此，`ws_send_call_ms` / `ws_parent_poll_ms` / `payload_write_ms` 的本质都是：
+
+```text
+设备侧把这次 WebSocket binary frame 提交给下层发送路径所花的时间
+```
+
+不是服务端回包 RTT，也不是“服务端处理完了”的时间。
+
+### 用水箱模型理解 1024B 与 4096B
+
+当前设备侧 lwIP 参数是：
+
+```text
+CONFIG_LWIP_TCP_MSS=1440
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=5760
+CONFIG_LWIP_TCP_WND_DEFAULT=5760
+CONFIG_LWIP_TCP_TMR_INTERVAL=250
+CONFIG_LWIP_TCP_RTO_TIME=1500
+```
+
+也就是 TCP send buffer 约为：
+
+```text
+5760B ~= 4 * MSS
+```
+
+这不是很大的缓冲。可以把它理解为一个小水箱：
+
+```text
+PCM producer:         稳定进水，约 32KB/s
+lwIP send buffer:     小水箱，约 5.6KB
+Cloudflare path:      出水口，drain 速度受公网、Edge、Tunnel、对端窗口影响
+WebSocket frame:      每次往水箱里倒的一桶水
+```
+
+`1024B` 的模式更像：
+
+```text
+等水箱腾出一次空间 -> 倒 1KB -> 很快又要等下一次空间
+```
+
+`4096B` 的模式更像：
+
+```text
+等水箱腾出一次空间 -> 尽量倒 4KB -> 同一次等待携带更多 PCM
+```
+
+所以 `4096B` 的优势不是“扩大了水箱”，而是更充分利用了一次可写机会，把 `poll_write` / write 调用等固定等待摊到更多字节上。
+
+这也解释了为什么 `4096B` 没有比 `1024B` 慢 4 倍：一次 `esp_transport_write(4096)` 进入下层后，TCP 会按 MSS 分段，`4096B / 1440B ~= 2.8` 个 segment；如果当前 send buffer / send queue 空间足够，它可以作为一次较大的提交完成，而不是每 `1KB` 重新经历一次完整的可写等待。
+
+但如果 Cloudflare 路径持续 drain 速度长期低于 PCM 生产速度，水箱最终仍会满。此时无论是 `1024B` 还是 `4096B`，最终都会表现为：
+
+```text
+poll_write 变长
+payload_write 变长
+tx ringbuf 积压
+dropped_bytes 增加
+```
+
+### 可写窗口大小取决于什么
+
+这里的“可写窗口”不是单个固定变量，而是多个层级共同决定的结果：
+
+```text
+应用层可继续写入的机会
+≈ 本地 TCP send buffer 剩余空间
++ TCP send queue / pbuf 可用空间
++ 拥塞窗口 cwnd
++ 对端接收窗口 rwnd
++ Wi-Fi 与公网路径的实际 drain 速度
++ Cloudflare Edge / Tunnel 的代理缓冲和转发节奏
++ TLS/WebSocket 分层写入行为
+```
+
+更具体到当前配置，`TCP_SND_BUF=5760B`，通常不会是“只要空出 1 字节就立刻可写”。lwIP 还会受 low-water、send queue、pbuf、select/poll 事件触发等条件影响。按常见 low-water 计算方式估算：
+
+```text
+TCP_SNDLOWAT ~= min(max(5760 / 2, 2 * 1440 + 1), 5759)
+             ~= 2881B
+```
+
+这个数值不是本次日志直接测得，而是基于当前 lwIP 配置的近似解释。它的意义是：socket 可写事件通常需要底层缓冲恢复到一定余量，而不是释放几个字节就立即放行应用层。
+
+### 可写窗口如何释放
+
+更谨慎的描述是：
+
+```text
+前面写入的数据被 TCP 对端 ACK
+并且 lwIP send buffer / send queue 恢复到 low-water 以上
+并且 socket writable event 被触发
+```
+
+在当前 Cloudflare 路径里，可以近似理解为：
+
+```text
+Cloudflare Edge 收到一部分 TCP segment
+  -> 回 ACK / 更新 receive window
+  -> ESP32 收到 ACK
+  -> lwIP 释放 snd_buf / snd_queue
+  -> socket 再次变为 writable
+  -> poll_write 返回
+```
+
+但这里必须保持边界：本轮没有 TCP 抓包，也没有 Cloudflare Edge 内部指标，所以不能把 `300ms` 简化成“某一个 ACK 慢”。它更像是整条路径的 drain 节奏、窗口释放、代理缓冲和设备侧小 send buffer 共同形成的结果。
+
 ## 为什么 `poll_write` 会成为阻塞点
 
 `poll_write` 的作用不是发送数据，而是询问或等待：
