@@ -47,6 +47,7 @@ export default defineConfig({
             { label: '02 Xiaozhi 音频流传输源码研究', slug: 'audio-stream-reliability/02-xiaozhi-audio-transport-study' },
             { label: '03 上行 PCM 发包链路', slug: 'audio-stream-reliability/03-uplink-pcm-backpressure-baseline' },
             { label: '04 Cloudflare 公网链路基线', slug: 'audio-stream-reliability/04-cloudflare-public-link-baseline' },
+            { label: '05 四象限对照基线分析', slug: 'audio-stream-reliability/05-four-quadrant-baseline-analysis' },
           ],
         },
         {

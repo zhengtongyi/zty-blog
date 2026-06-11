@@ -27,9 +27,10 @@ description: 记录 ESP32-S3 实时语音终端中音频流链路搭建、常见
 | [02 Xiaozhi 音频流传输源码研究](./02-xiaozhi-audio-transport-study/) | 对照 `xiaozhi-esp32-main`，研究 WebSocket、MQTT+UDP、Opus 队列和协议抽象。 |
 | [03 上行 PCM 发包链路：积压、回压与弱网基线](./03-uplink-pcm-backpressure-baseline/) | 研究上行 PCM 从采集到 WebSocket 发包之间的积压问题，明确瓶颈、指标和基线。 |
 | [04 Cloudflare 公网音频链路基线](./04-cloudflare-public-link-baseline/) | 记录 LAN 与 Cloudflare WSS 实机对照，定位发送阻塞、TX 积压和 PCM 丢弃。 |
-| 05 单变量诊断与优化 | 继续拆分 frame 聚合、TLS、Tunnel、TCP 行为，记录真实优化动作和失败尝试。 |
-| 06 异常场景与连续多轮 | 覆盖慢云端、断线、迟到 turn、播放打断和连续多轮。 |
-| 07 验证总结与面试表达 | 汇总证据、复盘价值，并沉淀成简历和面试叙事。 |
+| [05 四象限对照基线分析](./05-four-quadrant-baseline-analysis/) | 对比 LAN WS、LAN WSS、Cloudflare WS、Cloudflare WSS，收敛公网退化边界和下一步决策。 |
+| 06 单变量诊断与优化 | 继续拆分 direct origin、frame 聚合、TLS、Tunnel、TCP 行为，记录真实优化动作和失败尝试。 |
+| 07 异常场景与连续多轮 | 覆盖慢云端、断线、迟到 turn、播放打断和连续多轮。 |
+| 08 验证总结与面试表达 | 汇总证据、复盘价值，并沉淀成简历和面试叙事。 |
 
 ## 当前状态
 
@@ -39,5 +40,6 @@ description: 记录 ESP32-S3 实时语音终端中音频流链路搭建、常见
 - 第 2 章研究 Xiaozhi 的协议抽象、队列和传输模式。
 - 第 3 章定义上行积压指标，并拆出 `AudioLinkObserver`。
 - 第 4 章用 LAN/Cloudflare WSS 对照，定位当前公网发送路径的性能退化。
+- 第 5 章用四象限矩阵进一步确认：LAN WSS 基本健康，Cloudflare WS/WSS 都退化，因此不能简单归因为设备侧 TLS。
 
 后续章节会随着代码优化和实机测试逐步补齐。
