@@ -63,6 +63,83 @@ SRService
 | parent `poll_ms` | TCP/SSL transport 内部再次等待 socket 可写 | 底层 socket 不可写 |
 | parent `write_ms` | TCP `send()` 或 `mbedtls_ssl_write()` 实际写入耗时 | TLS record、socket send、TCP 缓冲、网络路径共同影响 |
 
+## `poll_write` 到底在等什么
+
+先给结论：
+
+> `poll_write` 等待的是**本机 socket/TCP/TLS 发送路径可写**，不是等待服务器应用层收到数据，也不是等待 WebSocket 对端返回 ACK。
+
+在 ESP-IDF v5.5.3 当前 transport 实现里，WebSocket 发送路径大致是：
+
+```text
+transport_ws.c::_ws_write()
+-> esp_transport_poll_write(ws->parent, timeout_ms)
+-> esp_transport_write(ws->parent, websocket_header, ...)
+-> esp_transport_write(ws->parent, payload, ...)
+```
+
+其中 parent transport 是 TCP 或 SSL/TLS。它们最终都会走到 `transport_ssl.c::base_poll_write()`，核心行为是：
+
+```text
+select(sockfd + 1, NULL, &writeset, &errset, timeout)
+```
+
+因此 `poll_write` 的三类返回可以理解为：
+
+| 返回 | 含义 | 对发送链路的影响 |
+|---|---|---|
+| `ret > 0` 且没有 `errset` | socket 当前可写 | 可以继续尝试写 WebSocket header / payload |
+| `ret == 0` | 等到 timeout 仍不可写 | 本次发送超时，业务层会看到 send call 变慢或失败 |
+| `errset` 或 `ret < 0` | socket 出错 | 连接异常，需要关闭或重连 |
+
+这里的“可写”不是说服务端已经收到这一帧，也不是说这一帧已经穿过 Cloudflare 到达 origin。它只表示：**本机 TCP/IP 栈认为当前 socket 至少可以继续接收一部分待发送字节。**
+
+更具体地说，通常需要同时满足这些条件：
+
+- TCP 连接仍然有效，没有 `SO_ERROR`；
+- 本地 lwIP socket send buffer 有可用空间；
+- TCP 发送窗口没有被耗尽；
+- 对端接收窗口不是长期为 0；
+- 拥塞窗口允许继续放入新数据；
+- Wi-Fi、公网、Cloudflare Edge/Tunnel、origin 这一整条路径正在把前序数据 drain 掉；
+- 对 WSS 来说，TLS 层还能把明文封成 TLS record，并把密文继续交给底层 socket。
+
+如果这些条件已经满足，`select()` 会很快返回，`esp_transport_write()` 基本不需要等待。  
+如果这些条件不满足，`select()` 就会一直等到以下事件之一发生：
+
+- 之前发送的数据被 ACK，释放发送窗口；
+- 对端更新 receive window；
+- 本地 socket send buffer 被底层 TCP 栈消化出空间；
+- 网络路径从拥塞或代理背压中恢复一部分；
+- 等到 `timeout_ms` 后返回超时；
+- socket 出错。
+
+![poll_write 等待条件与发送窗口示意图](/images/audio-link-poll-write-window.svg)
+
+需要注意一个细节：`poll_write` 只说明“现在可以尝试写”，不保证**本次 payload 的全部字节**都会毫无等待地写完。  
+所以本轮观测里同时看两个指标：
+
+| 指标 | 解释 |
+|---|---|
+| `ws_parent_poll_ms` | 写 WebSocket header/payload 之前，等待 parent transport 可写的时间。 |
+| `payload_write_ms` | 已经开始写 payload 后，TLS/TCP/socket 接收这批 payload 的耗时。 |
+
+如果 `ws_parent_poll_ms` 高，说明写之前 socket 就不可写。  
+如果 `payload_write_ms` 高，说明开始写之后，这批 payload 仍然被 TLS/TCP/socket 缓冲和公网路径拖住。
+
+这也解释了后续为什么压缩数据能降低 `esp_transport_write()` 的等待时间：
+
+```text
+每秒待发送字节更少
+-> send buffer 被消耗得更慢
+-> TCP 发送窗口更不容易被占满
+-> 前序数据 ACK/drain 更容易追上生产速度
+-> poll_write 更常立即返回
+-> payload_write 更少被长时间拖住
+```
+
+换句话说，Opus 不是改变了 `poll_write` 的判断逻辑，而是把上行数据率从裸 PCM 的约 `256kbps` 降到约 `20kbps`，让当前公网路径更容易保持“可写”状态。
+
 这也解释了为什么只看业务层的 `ws_send_call_ms` 不够。它只能说明：
 
 ```text

@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="620" viewBox="0 0 1080 620" role="img" aria-labelledby="title desc">
+  <title id="title">poll_write 等待条件与发送窗口示意图</title>
+  <desc id="desc">展示 WebSocket 写入前，ESP-IDF 通过 select 判断 socket 是否可写；当发送缓冲区和 TCP 发送窗口有余量时可以立即写入，否则等待 ACK、窗口更新或路径 drain。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155" />
+    </marker>
+    <style>
+      .title { font: 700 26px Arial, "Microsoft YaHei", sans-serif; fill: #0f172a; }
+      .subtitle { font: 15px Arial, "Microsoft YaHei", sans-serif; fill: #475569; }
+      .label { font: 15px Arial, "Microsoft YaHei", sans-serif; fill: #0f172a; }
+      .small { font: 13px Arial, "Microsoft YaHei", sans-serif; fill: #334155; }
+      .tiny { font: 12px Arial, "Microsoft YaHei", sans-serif; fill: #475569; }
+      .box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 14; }
+      .blue { fill: #e0f2fe; stroke: #0284c7; }
+      .green { fill: #dcfce7; stroke: #16a34a; }
+      .yellow { fill: #fef9c3; stroke: #ca8a04; }
+      .red { fill: #fee2e2; stroke: #dc2626; }
+      .gray { fill: #f1f5f9; stroke: #94a3b8; }
+      .line { stroke: #334155; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 6; fill: none; marker-end: url(#arrow); }
+      .bar-bg { fill: #e2e8f0; stroke: #94a3b8; stroke-width: 1; }
+      .bar-free { fill: #22c55e; }
+      .bar-used { fill: #f97316; }
+      .bar-block { fill: #ef4444; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="620" fill="#f8fafc" />
+  <text x="40" y="44" class="title">`poll_write` 到底在等什么？</text>
+  <text x="40" y="72" class="subtitle">它等待的是本机 socket/TCP/TLS 路径“可写”，不是等待服务端业务处理完成，也不是 WebSocket RTT。</text>
+
+  <rect x="40" y="105" width="290" height="145" class="box blue" rx="14" />
+  <text x="64" y="135" class="label">WebSocketTask</text>
+  <text x="64" y="165" class="small">esp_transport_write(ws, frame)</text>
+  <text x="64" y="190" class="small">-> _ws_write()</text>
+  <text x="64" y="215" class="small">-> parent poll_write()</text>
+
+  <rect x="395" y="105" width="290" height="145" class="box gray" rx="14" />
+  <text x="419" y="135" class="label">ESP-IDF parent transport</text>
+  <text x="419" y="165" class="small">select(sockfd, writefds, errfds)</text>
+  <text x="419" y="190" class="small">ret &gt; 0: socket 可写</text>
+  <text x="419" y="215" class="small">ret = 0: 超时；errset: 错误</text>
+
+  <rect x="750" y="105" width="290" height="145" class="box green" rx="14" />
+  <text x="774" y="135" class="label">允许写入的典型状态</text>
+  <text x="774" y="165" class="small">send buffer 有空闲</text>
+  <text x="774" y="190" class="small">TCP cwnd / rwnd 未耗尽</text>
+  <text x="774" y="215" class="small">前序数据已被 ACK / drain</text>
+
+  <path d="M330 177 L395 177" class="line" />
+  <path d="M685 177 L750 177" class="line" />
+
+  <text x="40" y="296" class="label">情况 A：可以立即写</text>
+  <rect x="40" y="318" width="470" height="88" class="box green" rx="12" />
+  <text x="64" y="348" class="small">socket 发送缓冲区</text>
+  <rect x="64" y="365" width="395" height="24" class="bar-bg" rx="5" />
+  <rect x="64" y="365" width="180" height="24" class="bar-used" rx="5" />
+  <rect x="244" y="365" width="215" height="24" class="bar-free" rx="5" />
+  <text x="82" y="383" class="tiny">已占用</text>
+  <text x="315" y="383" class="tiny">空闲，可接收本次 header/payload</text>
+
+  <rect x="560" y="318" width="480" height="88" class="box green" rx="12" />
+  <text x="584" y="348" class="small">select 立即返回 writable</text>
+  <text x="584" y="374" class="small">WebSocket header + payload 可以进入 parent write</text>
+  <text x="584" y="396" class="tiny">本项目观测：LAN WSS 多为几毫秒；Opus 上行 p95 约 5ms。</text>
+
+  <text x="40" y="455" class="label">情况 B：必须等待</text>
+  <rect x="40" y="477" width="470" height="88" class="box red" rx="12" />
+  <text x="64" y="507" class="small">socket 发送缓冲区 / TCP 发送窗口</text>
+  <rect x="64" y="524" width="395" height="24" class="bar-bg" rx="5" />
+  <rect x="64" y="524" width="330" height="24" class="bar-block" rx="5" />
+  <rect x="394" y="524" width="65" height="24" class="bar-free" rx="5" />
+  <text x="82" y="542" class="tiny">未 ACK / 未 drain 数据过多</text>
+  <text x="405" y="542" class="tiny">余量不足</text>
+
+  <rect x="560" y="477" width="480" height="88" class="box yellow" rx="12" />
+  <text x="584" y="507" class="small">select 阻塞等待以下事件之一</text>
+  <text x="584" y="532" class="small">ACK 到达、rwnd/cwnd 释放、send buffer drain、或 timeout</text>
+  <text x="584" y="554" class="tiny">本项目观测：Cloudflare PCM send P95 约 300ms，超过实时 PCM 生产能力。</text>
+
+  <path d="M275 406 C275 445, 275 445, 275 477" class="dash" />
+  <text x="302" y="449" class="tiny">如果写入速度长期低于生产速度，缓冲区逐步被填满</text>
+
+  <text x="40" y="598" class="subtitle">降码率的作用：每秒写入的字节更少，send buffer / TCP 窗口释放速度更容易跟上生产速度，因此 poll_write 更常立即返回。</text>
+</svg>
