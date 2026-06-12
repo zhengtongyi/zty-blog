@@ -30,7 +30,7 @@ description: 记录 ESP32-S3 实时语音终端中音频流链路搭建、常见
 | [05 四象限对照基线分析](./05-four-quadrant-baseline-analysis/) | 对比 LAN WS、LAN WSS、Cloudflare WS、Cloudflare WSS，收敛公网退化边界和下一步决策。 |
 | [06 Frame 聚合单变量实验](./06-frame-aggregation-analysis/) | 对比 1024B、2048B、4096B frame，验证聚合有效但不足以消除 Cloudflare 路径背压，并拆解每帧固定开销。 |
 | [07 Transport 写入分层](./07-transport-write-breakdown/) | 通过 ESP-IDF transport 临时观测补丁拆解 `poll_write` 与 `payload_write`，确认 Cloudflare 路径背压层级。 |
-| [08 Opus 降码率验证](./08-opus-uplink-bitrate-baseline/) | 解释 Opus 协议语义、优劣势，并记录上行吞吐匹配、下行接收解码和 TTSPlayer 播放补测。 |
+| [08 Opus 降码率验证](./08-opus-uplink-bitrate-baseline/) | 解释 Opus 协议语义、优劣势，并记录上行吞吐匹配、下行接收解码和 TTSPlayer 水位矩阵补测。 |
 
 ## 当前状态
 
@@ -43,6 +43,6 @@ description: 记录 ESP32-S3 实时语音终端中音频流链路搭建、常见
 - 第 5 章用四象限矩阵进一步确认：LAN WSS 基本健康，Cloudflare WS/WSS 都退化，因此不能简单归因为设备侧 TLS。
 - 第 6 章完成 frame 聚合单变量实验：4096B 显著降低单位 KB 发送成本，但仍只能跟上约一半的 PCM 生产速率，下一步需要拆分 transport write 耗时。
 - 第 7 章完成 transport 写入分层：Cloudflare WS/WSS 的主要尾延迟来自 `poll_write` 与 payload write 背压，TLS 不是第一瓶颈。
-- 第 8 章完成 Opus 上行 metrics-only smoke 与下行补测：上行 `encoded == sent == server_received`；下行 Opus 全量接收解码通过，但 TTSPlayer 仍有少量 underrun / rebuffer，需要单独优化播放缓冲策略。
+- 第 8 章完成 Opus 上行 metrics-only smoke、下行接收解码补测和 TTSPlayer 水位矩阵：上行 `encoded == sent == server_received`；下行 Opus 全量接收解码通过；`600/320ms`、`800/500ms`、`1000/600ms` 三组播放水位均无 rebuffer，当前先保留默认 `600/320ms`，后续用更长真实 TTS 流验证。
 
 后续章节会随着代码优化和实机测试逐步补齐。

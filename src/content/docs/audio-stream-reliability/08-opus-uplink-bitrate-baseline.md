@@ -508,6 +508,49 @@ max_backlog_ms = 600
 
 这更像是播放启动水位、播放中低水位 rebuffer、以及“服务端结束后的收尾 underrun”没有被区分好。换句话说，本次测试把问题从“是不是 Cloudflare 下行吞吐不够”收敛到了“低码率下行已能覆盖，下一步应优化 TTSPlayer 播放连续性”。
 
+### TTSPlayer 水位矩阵补测
+
+为了继续定位“下行 Opus 已经全收全解码，但扬声器播放偶发不连续”的问题，本轮又做了一次 TTSPlayer 启动水位 / 恢复水位矩阵补测。
+
+测试前先发现一个容易误判的问题：最初几轮运行目录虽然命名为 `800/500ms`、`1000/600ms`，但固件日志仍然显示实际水位是 `600/320ms`。原因是测试宏只传给了 `components/service/CMakeLists.txt`，而 `test_audio_downlink_baseline.c` 实际由 `components/test` 编译。修正编译参数后重新烧录，下面只记录修正后的有效矩阵。
+
+统一条件：
+
+| 项目 | 配置 |
+|---|---|
+| 路径 | Cloudflare WSS |
+| 服务端发送 | valid Opus `50B / 20ms`，约 `20kbps` |
+| 设备处理 | WebSocket 接收 -> Opus 解码 -> PCM -> TTSPlayer / I2S |
+| 每组轮次 | `15s * 3` |
+| 业务链路 | 不启用 ASR / Agent / TTS provider |
+
+有效结果：
+
+| 启动 / 恢复水位 | 轮次 | Rebuffer | Underrun | `rx_gap_ms_max` | 解码 PCM 产出 | `max_write_ms` | 结论 |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `600/320ms` | 3/3 | 0 | 0 | `329ms` | 约 `245.2kbps` | `45-46ms` | PASS |
+| `800/500ms` | 3/3 | 0 | 1 | `670ms` | 约 `242.5kbps` | `46ms` | PASS |
+| `1000/600ms` | 3/3 | 0 | 0 | `344ms` | 约 `245.1kbps` | `45-46ms` | PASS |
+
+这组结果说明三件事。
+
+第一，当前 Cloudflare WSS + Opus 下行场景里，`600/320ms` 已经能覆盖本轮 `15s` 测试的到达抖动。三轮都是 `rebuffer=0`、`underrun=0`，说明之前的偶发播放不连续更像是播放水位策略不足，而不是 Opus 解码能力不足。
+
+第二，更高水位不是免费收益。`1000/600ms` 更保守，但会把启动等待推到接近 `700-760ms` 的量级；对语音对话来说，这会直接增加“云端已经开始回话，但设备还没出声”的体感延迟。`800/500ms` 在一轮里遇到 `rx_gap_ms_max=670ms` 仍没有 rebuffer，但出现了 `underrun=1`，更像是收尾读空或边界统计问题，不能直接当作中途可感知卡顿。
+
+第三，`max_write_ms` 稳定在 `45-46ms`，且没有 `short_write`。这说明本轮瓶颈不在 I2S 写入本身；播放连续性的关键更偏向“开始播放前攒多少 PCM”和“播放中低于水位后如何暂停 / 恢复”。
+
+因此当前更稳妥的结论是：
+
+```text
+Cloudflare WSS 下行裸 PCM：吞吐不足，不适合直接实时播放。
+Cloudflare WSS 下行 Opus：网络接收和解码能力足够。
+TTSPlayer 默认 600/320ms 水位：本轮 15s 矩阵可通过，可作为当前默认策略。
+动态水位：暂不需要立即引入，等更长真实 TTS 流和更复杂网络抖动再评估。
+```
+
+后续如果真实 TTS 不是稳定 `50B / 20ms`，而是存在更明显的 burst / gap，就需要把 `streaming_underrun` 和 `end_of_stream_underrun` 区分开，再考虑有限范围内的自适应水位，例如把启动水位限制在 `400-1000ms` 之间，而不是无上限增加播放延迟。
+
 ## 当前结论
 
 本章能得出的结论有四个：
@@ -521,8 +564,8 @@ max_backlog_ms = 600
 3. **当前实现还不是最终生产设计。**  
    同步编码导致 `sr_detect` 栈需求明显上升；SR wall-clock 生产速率低于理论值；ASR 准确率和全链路首响还没有验证。
 
-4. **下行 Opus 接收和解码能力通过最小验证，但播放连续性仍需优化。**  
-   Cloudflare WSS 裸 PCM 下行覆盖不了 `32KB/s`；Opus 下行能全量接收并解码，但 TTSPlayer 仍出现少量 underrun / rebuffer，需要单独处理播放缓冲策略。
+4. **下行 Opus 接收、解码和基础播放水位策略通过最小验证。**  
+   Cloudflare WSS 裸 PCM 下行覆盖不了 `32KB/s`；Opus 下行能全量接收并解码。补测 TTSPlayer 水位矩阵后，`600/320ms`、`800/500ms`、`1000/600ms` 三组均无 rebuffer，当前可先保留 `600/320ms` 作为默认策略，再用更长真实 TTS 流验证。
 
 ## 下一步
 
@@ -538,10 +581,11 @@ max_backlog_ms = 600
    - PCM 上行 vs Opus 上行；
    - 比较 ASR final、首响、失败率和设备回 listening 的状态。
 
-3. **TTSPlayer 播放连续性验证**
-   - 区分播放中 underrun 和服务端结束后的收尾 underrun；
-   - 调整启动水位和 rebuffer 水位；
-   - 记录 `read_timeout`、`rebuffer`、`short_write`、`max_backlog_ms` 与用户听感。
+3. **真实 TTS 播放连续性验证**
+   - 用真实 TTS provider 输出替代固定 `50B / 20ms` 测试流；
+   - 延长到 `60s` 或多段连续回复；
+   - 区分播放中 `streaming_underrun` 和服务端结束后的 `end_of_stream_underrun`；
+   - 记录 `rx_gap_ms_max`、`read_timeout`、`rebuffer`、`short_write`、`max_backlog_ms` 与用户听感。
 
 只有这些验证都通过后，Opus 才能从“吞吐验证通过”升级为“可进入生产链路的编码方案”。
 
