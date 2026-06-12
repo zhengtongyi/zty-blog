@@ -51,6 +51,7 @@ export default defineConfig({
             { label: '06 Frame 聚合单变量实验', slug: 'audio-stream-reliability/06-frame-aggregation-analysis' },
             { label: '07 Transport 写入分层', slug: 'audio-stream-reliability/07-transport-write-breakdown' },
             { label: '08 Opus 降码率验证', slug: 'audio-stream-reliability/08-opus-uplink-bitrate-baseline' },
+            { label: '09 真实会话与播放瓶颈', slug: 'audio-stream-reliability/09-opus-real-session-pi-agent-playback' },
           ],
         },
         {
