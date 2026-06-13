@@ -32,6 +32,7 @@ description: 记录 ESP32-S3 实时语音终端中音频流链路搭建、常见
 | [07 Transport 写入分层](./07-transport-write-breakdown/) | 通过 ESP-IDF transport 临时观测补丁拆解 `poll_write` 与 `payload_write`，确认 Cloudflare 路径背压层级。 |
 | [08 Opus 降码率验证](./08-opus-uplink-bitrate-baseline/) | 解释 Opus 协议语义、优劣势，并记录上行吞吐匹配、下行接收解码和 TTSPlayer 水位矩阵补测。 |
 | [09 双向 Opus 真实会话验证](./09-opus-real-session-pi-agent-playback/) | 记录 Cloudflare WSS + pi-agent 下 `PCM -> Opus -> ASR -> Agent -> TTS -> Opus -> PCM` 的实机验证，确认协议打通，同时暴露真实长回复下行背压。 |
+| [10 下行 Opus 速率协商验证](./10-opus-paced-downlink-verification/) | 记录设备侧接入 `send_rate_multiplier=1.2` 后，Cloudflare WSS 双向 Opus 自动化 smoke 通过，下行 decoder queue 溢出未复现，并把后续问题收敛到播放听感和 TTSPlayer 水位策略。 |
 
 ## 当前状态
 
@@ -46,5 +47,6 @@ description: 记录 ESP32-S3 实时语音终端中音频流链路搭建、常见
 - 第 7 章完成 transport 写入分层：Cloudflare WS/WSS 的主要尾延迟来自 `poll_write` 与 payload write 背压，TLS 不是第一瓶颈。
 - 第 8 章完成 Opus 上行 metrics-only smoke、下行接收解码补测和 TTSPlayer 水位矩阵：上行 `encoded == sent == server_received`；下行 Opus 全量接收解码通过；`600/320ms`、`800/500ms`、`1000/600ms` 三组播放水位均无 rebuffer，当前先保留默认 `600/320ms`，后续用更长真实 TTS 流验证。
 - 第 9 章完成双向 Opus 真实 `pi-agent` 会话 smoke：`input=opus / output=opus` 协商和上行 ASR/Agent 已打通，但天气长回复阶段 `AudioOpusDecoder` packet queue 达到 256 包后溢出，当前结论是 `FAIL-DOWNLINK-BACKPRESSURE`，下一步聚焦下行水位观测、背压和动态 pacing。
+- 第 10 章完成 `send_rate_multiplier=1.2` 设备侧协商与云端 paced sender 验证：Cloudflare WSS 双向 Opus smoke 自动化通过，`OPUS_DEC_QUEUE drops=0`，第 9 章的下行队列溢出未复现；当前剩余问题收敛到人工听感确认、播放中 underrun 分类和 TTSPlayer 水位策略。
 
 后续章节会随着代码优化和实机测试逐步补齐。
