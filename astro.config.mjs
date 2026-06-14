@@ -34,6 +34,17 @@ export default defineConfig({
           ],
         },
         {
+          label: 'esp-audio-stream 开发归档',
+          items: [
+            { label: '专栏总览', slug: 'projects/esp-audio-stream' },
+            { label: 'SDD-00 项目章程', slug: 'projects/esp-audio-stream/sdd-00-project-charter' },
+            { label: 'SDD-00.5 开源扫描', slug: 'projects/esp-audio-stream/sdd-00-5-open-source-scan' },
+            { label: 'SDD-00.6 价值验证', slug: 'projects/esp-audio-stream/sdd-00-6-value-validation' },
+            { label: 'SDD-00 设计记录', slug: 'projects/esp-audio-stream/sdd-00-design-record' },
+            { label: '对话归档摘要', slug: 'projects/esp-audio-stream/conversation-archive-summary' },
+          ],
+        },
+        {
           label: '音频流链路搭建与可靠性优化',
           items: [
             { label: '专栏总览', slug: 'audio-stream-reliability' },

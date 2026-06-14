@@ -6,6 +6,9 @@ hero:
   title: ZTY Blog
   tagline: 记录 ESP32、AIoT、云端服务与 AI Agent 的设计、调试和工程经验。
   actions:
+    - text: 阅读 esp-audio-stream 归档
+      link: /projects/esp-audio-stream/
+      icon: open-book
     - text: 阅读 Service 模块笔记
       link: /projects/pixel-soul-services/
       icon: right-arrow
@@ -25,6 +28,7 @@ hero:
 
 ## 最近更新
 
+- [esp-audio-stream 00 环节开发归档](/projects/esp-audio-stream/)
 - [ESP32-S3-RLCD 官方 Demo 学习路线](/projects/esp32-s3-rlcd-demos/)
 - [Pixel Soul Service 模块复习总览](/projects/pixel-soul-services/)
 - [Pixel Soul 全链路复盘总览](/projects/pixel-soul-review/)
