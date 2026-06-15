@@ -16,6 +16,33 @@ IoT 设备不是连上 Wi-Fi 就算联网成功。面试官会看你是否理解
 
 ## 高频问题
 
+### Q0：ESP32 Wi-Fi 从连接 AP 到真正能通信经历哪些步骤？
+
+**短答：**
+
+Wi-Fi 建连不是一步完成，而是：
+
+```text
+扫描 AP
+  -> 802.11 Authentication
+  -> Association
+  -> WPA2 4-Way Handshake
+  -> DHCP 获取 IP
+  -> TCP/UDP 应用通信
+```
+
+**展开回答：**
+
+扫描阶段通过 Beacon 或 Probe 发现 AP；认证和关联建立二层 Wi-Fi 链路；WPA2 四次握手生成会话密钥；DHCP 拿到 IP、网关和 DNS；之后应用层才能建立 TCP/TLS/WebSocket 或 MQTT。
+
+**结合我的项目：**
+
+设备侧不能把 `WIFI_EVENT_STA_CONNECTED` 当成业务可用。我的项目里至少区分 `Wi-Fi connected`、`got IP`、`gateway reachable`、`session active` 四层状态。
+
+**继续追问：**
+
+`WIFI_EVENT_STA_CONNECTED` 只表示二层连接成功；`IP_EVENT_STA_GOT_IP` 才表示网络层 ready。
+
 ### Q1：Wi-Fi connected、got IP、gateway reachable、session active 有什么区别？
 
 **短答：**
@@ -228,4 +255,3 @@ audio drop/rebuffer
 ```text
 我理解 IoT 网络通信要分层看：Wi-Fi 连接、IP 获取、TCP/TLS/WebSocket 建立和应用 session 都是不同状态。项目里我把 JSON 控制消息和 binary 音频数据分开，WebSocket 负责 frame 搬运，Session 负责协议状态。遇到弱网或播放断续，会结合读写超时、队列深度和 TCP 背压分层定位。
 ```
-

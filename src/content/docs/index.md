@@ -33,6 +33,8 @@ hero:
 - [Pixel Soul Service 模块复习总览](/projects/pixel-soul-services/)
 - [Pixel Soul 全链路复盘总览](/projects/pixel-soul-review/)
 - [仿生知觉专项面试准备](/interviews/bionic-perception/)
+- [Wi-Fi 外包面经](/interviews/wifi-outsourcing/)
+- [Wi-Fi 模块重构与优化](/projects/wifi-module-refactor/)
 - [Session：AI 会话状态机](/projects/pixel-soul-services/session-service/)
 - [ESP32-S3 电池电压采样原理与 PowerService 背景](/notes/esp32-s3-adc-battery/)
 - [Pixel Soul 项目记录](/projects/pixel-soul/)

@@ -64,6 +64,15 @@ export default defineConfig({
           label: '面试准备',
           items: [
             { label: 'vivo外包', slug: 'interviews/vivo-outsourcing' },
+            { label: 'Wi-Fi外包', slug: 'interviews/wifi-outsourcing' },
+          ],
+        },
+        {
+          label: 'Wi-Fi 模块重构与优化',
+          items: [
+            { label: '专栏总览', slug: 'projects/wifi-module-refactor' },
+            { label: '01 建连与事件模型', slug: 'projects/wifi-module-refactor/01-esp32-wifi-connection-event-model' },
+            { label: '02 重连与功耗策略', slug: 'projects/wifi-module-refactor/02-esp32-wifi-reconnect-power-strategy' },
           ],
         },
         {
