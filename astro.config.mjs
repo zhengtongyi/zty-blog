@@ -90,6 +90,17 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Linux 平台与求职路线',
+          items: [
+            { label: '专栏总览', slug: 'linux-career-roadmap' },
+            { label: '01 厦门市场与方向判断', slug: 'linux-career-roadmap/01-xiamen-market-and-direction' },
+            { label: '02 RK3568 学习路线与资料', slug: 'linux-career-roadmap/02-rk3568-learning-roadmap' },
+            { label: '03 i.MX 与 RK 选型分析', slug: 'linux-career-roadmap/03-imx-vs-rk-selection' },
+            { label: '04 面向求职的硬件选型', slug: 'linux-career-roadmap/04-job-oriented-board-selection' },
+            { label: '05 当前项目如何升级', slug: 'linux-career-roadmap/05-upgrade-esp32-project-to-linux-gateway' },
+          ],
+        },
+        {
           label: '部署',
           items: [
             { label: 'Cloudflare Pages', slug: 'deploy/cloudflare-pages' },
