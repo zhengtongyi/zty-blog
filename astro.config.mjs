@@ -76,6 +76,19 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Wi-Fi 模组产品拆解',
+          items: [
+            { label: '专栏总览', slug: 'wifi-module-product-study' },
+            { label: '01 产品形态与架构', slug: 'wifi-module-product-study/01-product-architecture' },
+            { label: '02 从上电到联网', slug: 'wifi-module-product-study/02-runtime-flow' },
+            { label: '03 802.11 与射频基础', slug: 'wifi-module-product-study/03-80211-rf-antenna' },
+            { label: '04 TCP/IP 与应用协议', slug: 'wifi-module-product-study/04-tcpip-and-application-protocols' },
+            { label: '05 UART AT 主控接入', slug: 'wifi-module-product-study/05-uart-at-host-integration' },
+            { label: '06 低功耗与量产测试', slug: 'wifi-module-product-study/06-low-power-production-test' },
+            { label: '07 面试输出与应答', slug: 'wifi-module-product-study/07-interview-output' },
+          ],
+        },
+        {
           label: '嵌入式面试八股文',
           items: [
             { label: '专栏总览', slug: 'interview-handbook' },
@@ -98,6 +111,8 @@ export default defineConfig({
             { label: '03 i.MX 与 RK 选型分析', slug: 'linux-career-roadmap/03-imx-vs-rk-selection' },
             { label: '04 面向求职的硬件选型', slug: 'linux-career-roadmap/04-job-oriented-board-selection' },
             { label: '05 当前项目如何升级', slug: 'linux-career-roadmap/05-upgrade-esp32-project-to-linux-gateway' },
+            { label: '06 网关项目真实性校验', slug: 'linux-career-roadmap/06-is-linux-gateway-real-project' },
+            { label: '07 MCU 与 RS485 网关协同', slug: 'linux-career-roadmap/07-mcu-rs485-linux-gateway-for-sensor-rfid' },
           ],
         },
         {
