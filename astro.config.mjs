@@ -65,6 +65,7 @@ export default defineConfig({
           items: [
             { label: 'vivo外包', slug: 'interviews/vivo-outsourcing' },
             { label: 'Wi-Fi外包', slug: 'interviews/wifi-outsourcing' },
+            { label: '汉印股份', slug: 'interviews/hanin-printer' },
           ],
         },
         {
