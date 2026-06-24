@@ -113,6 +113,7 @@ export default defineConfig({
             { label: '05 当前项目如何升级', slug: 'linux-career-roadmap/05-upgrade-esp32-project-to-linux-gateway' },
             { label: '06 网关项目真实性校验', slug: 'linux-career-roadmap/06-is-linux-gateway-real-project' },
             { label: '07 MCU 与 RS485 网关协同', slug: 'linux-career-roadmap/07-mcu-rs485-linux-gateway-for-sensor-rfid' },
+            { label: '08 智能运维边缘网关', slug: 'linux-career-roadmap/08-edge-aiops-agent-gateway' },
           ],
         },
         {
